@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Cloner.App/Cloner.App.csproj" />
+    <Project Path="src/Cloner.Cli/Cloner.Cli.csproj" />
+    <Project Path="src/Cloner.Core/Cloner.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cloner.Core.Tests/Cloner.Core.Tests.csproj" />
+    <Project Path="tests/Cloner.IntegrationTests/Cloner.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
