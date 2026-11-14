@@ -48,6 +48,8 @@ internal static class DiskInventoryBuilder
                 LogicalSectorSize = checked((int)disk.LogicalSectorSize),
                 PhysicalSectorSize = checked((int)disk.PhysicalSectorSize),
                 Identifier = BuildIdentifier(disk),
+                DevicePath = FirstNonEmpty(disk.Path),
+                Location = FirstNonEmpty(disk.Location),
                 ContainsWindows = disk.IsBoot,
                 ContainsBootLoader = disk.IsSystem,
                 IsOffline = disk.IsOffline,
@@ -155,8 +157,8 @@ internal static class DiskInventoryBuilder
         };
     }
 
-    // Valores de MSFT_Disk.BusType.
-    private static BusKind MapBus(ushort busType) => busType switch
+    // Valores de MSFT_Disk.BusType, que son los de STORAGE_BUS_TYPE.
+    internal static BusKind MapBus(ushort busType) => busType switch
     {
         0 => BusKind.Unknown,
         1 => BusKind.Scsi,

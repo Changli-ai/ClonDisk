@@ -18,6 +18,7 @@ public class DiskInventoryBuilderTests
                 Number = 1, Model = "  WDC WD10EZEX  ", SerialNumber = " WD-123 ", Size = 1_000_204_886_016,
                 BusType = 7, PartitionStyle = 1, LogicalSectorSize = 512, PhysicalSectorSize = 4096,
                 HealthStatus = 0, Signature = 0x00C0FFEE,
+                Path = @"\\?\usbstor#disk&ven_wdc#1#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}", Location = "  ",
             },
             new RawDisk
             {
@@ -64,6 +65,16 @@ public class DiskInventoryBuilderTests
             new RawVolume { Path = DataVolume.ToUpperInvariant(), FileSystem = "NTFS", Label = "Datos", Size = 500_000_000_000, SizeRemaining = 100_000_000_000 },
         ],
     };
+
+    [Fact]
+    public void DevicePathAndLocationAreKeptWhenPresent()
+    {
+        var disks = DiskInventoryBuilder.Build(TwoDisks());
+
+        Assert.Null(disks[0].DevicePath);
+        Assert.StartsWith(@"\\?\usbstor#", disks[1].DevicePath, StringComparison.Ordinal);
+        Assert.Null(disks[1].Location);
+    }
 
     [Fact]
     public void DisksAreOrderedByNumberAndPartitionsByOffset()

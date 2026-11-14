@@ -55,6 +55,8 @@ internal sealed class WmiStorageReader : IStorageReader
         HealthStatus = Number<ushort>(disk, "HealthStatus") ?? ushort.MaxValue,
         Signature = Number<uint>(disk, "Signature"),
         Guid = disk["Guid"] as string,
+        Path = disk["Path"] as string,
+        Location = disk["Location"] as string,
     };
 
     private static RawPhysicalDisk ReadPhysicalDisk(ManagementObject physicalDisk) => new()

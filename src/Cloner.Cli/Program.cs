@@ -23,6 +23,12 @@ switch (command)
             return 2;
         }
 
+    case "plan":
+        return await CloneCommand.RunAsync(args, execute: false);
+
+    case "clone":
+        return await CloneCommand.RunAsync(args, execute: true);
+
     case "version" or "--version":
         Console.WriteLine($"Cloner CLI {version}");
         return 0;
@@ -43,7 +49,14 @@ void WriteHelp(TextWriter output)
     output.WriteLine();
     output.WriteLine("Uso: cloner <comando>");
     output.WriteLine();
-    output.WriteLine("  list      Muestra los discos del equipo y sus particiones (solo lectura).");
-    output.WriteLine("  version   Muestra la versión.");
-    output.WriteLine("  help      Muestra esta ayuda.");
+    output.WriteLine("  list                        Muestra los discos del equipo y sus particiones (solo lectura).");
+    output.WriteLine("  plan <origen> <destino>     Muestra qué haría un clonado, sin escribir nada.");
+    output.WriteLine("  clone <origen> <destino>    Clona el disco de origen sobre el de destino, sector a sector.");
+    output.WriteLine("                              Borra todo el destino; pide confirmación antes de escribir.");
+    output.WriteLine("      --no-verify             No relee el destino para compararlo al terminar.");
+    output.WriteLine("      --virtual-only          Solo admite destinos virtuales (VHD/VHDX), para pruebas.");
+    output.WriteLine("  version                     Muestra la versión.");
+    output.WriteLine("  help                        Muestra esta ayuda.");
+    output.WriteLine();
+    output.WriteLine("Los discos se indican por el número que muestra «list». Clonar requiere administrador.");
 }

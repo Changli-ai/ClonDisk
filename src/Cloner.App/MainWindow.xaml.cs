@@ -1,5 +1,6 @@
 using System.Windows;
 using Cloner.App.ViewModels;
+using Cloner.Core.Cloning;
 using Cloner.Core.Inventory;
 
 namespace Cloner.App;
@@ -8,7 +9,7 @@ namespace Cloner.App;
 public partial class MainWindow : Window
 {
     public MainWindow()
-        : this(new MainViewModel(new DiskInventory()))
+        : this(CreateViewModel())
     {
     }
 
@@ -18,6 +19,18 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         DataContext = viewModel;
+        viewModel.ShowCloneWizard = createViewModel =>
+        {
+            var wizard = new CloneWindow { Owner = this };
+            wizard.ViewModel = createViewModel(wizard);
+            wizard.ShowDialog();
+        };
         Loaded += async (_, _) => await viewModel.RefreshCommand.ExecuteAsync(null);
+    }
+
+    private static MainViewModel CreateViewModel()
+    {
+        var inventory = new DiskInventory();
+        return new MainViewModel(inventory, new CloneService(inventory));
     }
 }

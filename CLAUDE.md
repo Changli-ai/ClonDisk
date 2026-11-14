@@ -5,8 +5,10 @@ Aplicación de escritorio para Windows 10 y 11 que clona discos y particiones en
 sistema: al retirar el disco original y poner el clon, el equipo debe arrancar y funcionar
 exactamente igual.
 
-**Estado actual:** etapas 0 y 1 completadas. La app y la CLI inspeccionan discos y particiones
-en solo lectura; todavía no hay ninguna función de clonado. La siguiente es la etapa 2.
+**Estado actual:** etapas 0 y 1 completadas. Etapa 2 (clonado sector a sector de un disco de
+datos a otro igual o mayor) implementada en el motor, la CLI y la interfaz. Todas sus pruebas
+pasan, incluidas las de integración con VHD ejecutadas como administrador; falta que el usuario
+la dé por buena.
 
 Pendiente de la etapa 1: la lectura de SMART y de BitLocker solo funciona como administrador
 y **no se ha comprobado en una consola elevada** (las sesiones de desarrollo no lo son).
@@ -127,7 +129,7 @@ Actualiza este archivo cuando una etapa se complete o cambie una decisión.
 | Instantánea en caliente | **VSS** (Volume Shadow Copy Service). Vía por decidir en la etapa 3: AlphaVSS, WMI `Win32_ShadowCopy` o un shim nativo en C++ |
 | Arranque | `bcdboot` y edición del BCD; partición EFI en GPT, sector de arranque en MBR |
 | Medio de arranque | WinPE, construido a partir de Windows ADK o del entorno de recuperación local (WinRE) |
-| Verificación | SHA-256 o xxHash por bloques |
+| Verificación | XxHash3 por bloque de 4 MiB y XxHash128 de todo lo escrito (`System.IO.Hashing`) |
 | Registro | `Microsoft.Extensions.Logging` con salida a archivo |
 | Pruebas | xUnit; integración contra discos virtuales VHD/VHDX |
 | Distribución | Manifiesto `requireAdministrator`, firma de código, instalador (por decidir) |
@@ -165,6 +167,38 @@ ventana con un `IDiskInventory` falso y la dibuja a PNG con `RenderTargetBitmap`
 Un clonado se separa en dos fases: **planificar** (produce un plan inmutable y revisable con
 todo lo que se leerá y escribirá) y **ejecutar** (aplica el plan). La interfaz muestra el plan
 para la confirmación de RS-03, y las pruebas validan planes sin escribir nada.
+
+Clonado (`Cloner.Core/Cloning`, etapa 2):
+
+- `ICloneService` (`CloneService`) es la entrada para la CLI y la interfaz: `CreatePlan` lee la
+  tabla del origen y llama a `ClonePlanner`; `RunAsync` revalida con un inventario nuevo
+  (`PlanValidation`, RS-04) y ejecuta `CloneExecutor`. `RunAsync` no lanza: todo fallo va en
+  `CloneResult`.
+- `ClonePlanner` concentra las reglas RS-02/RS-06 y el orden de escritura. Orden (RS-05): borrar
+  el primer MiB y el último MiB del destino, copiar los datos, escribir la GPT de respaldo y,
+  por último, el primer MiB con la tabla. Un clon interrumpido queda sin tabla (disco «sin
+  inicializar»). Si el destino es mayor y el origen es GPT, la tabla se ajusta: la cabecera
+  apunta a una copia de respaldo nueva al final del destino (`PartitionTable`).
+- `CloneExecutor` usa un hilo lector y otro escritor con 4 búferes alineados de 4 MiB. Calcula
+  XxHash3 de cada bloque escrito y XxHash128 de todo; la verificación relee el destino y compara
+  bloque a bloque. Si no coincide, vuelve a borrar la tabla. Antes de escribir comprueba que el
+  dispositivo abierto y su tabla son los del plan, bloquea los volúmenes del origen y bloquea y
+  desmonta los del destino.
+- Sin VSS (llega en la etapa 3), un volumen del origen en uso impide clonar.
+- `IDiskAccess`/`IBlockDevice` se sustituyen en las pruebas por discos en memoria
+  (`MemoryDisk`) o archivos (`DiskDevice.OpenFile`), que recorren la misma E/S sin caché.
+- `Devices/DiskDevice` usa CsWin32 solo para funciones y constantes; las estructuras de los
+  IOCTL se interpretan a mano en `DeviceDescriptors`, con pruebas.
+- Registro: un archivo por operación en `%LOCALAPPDATA%\Cloner\Registros` (`FileLogger`, con
+  mensajes `LoggerMessage` en `CloneLog`). La interfaz permite exportarlo.
+- El clon conserva el identificador del disco: con origen y clon conectados a la vez, Windows
+  deja uno sin conexión. Elegir identificadores nuevos es la etapa 4 (RF-18).
+- `CloneOptions.VirtualTargetOnly` (CLI: `--virtual-only`) solo admite destinos VHD/VHDX; las
+  pruebas de integración y cualquier prueba manual durante el desarrollo deben usarlo.
+
+Interfaz: el botón «Clonar disco…» abre `CloneWindow` (`CloneViewModel`), un asistente con
+cuatro fases: elegir discos, revisar el plan con lo que se borrará y confirmar, progreso con
+cancelación y resultado con exportación del registro.
 
 ## Etapas
 
@@ -210,8 +244,22 @@ dotnet build                                 # compila todo; las advertencias so
 dotnet test                                  # todas las pruebas
 dotnet test tests/Cloner.Core.Tests          # solo unitarias
 dotnet run --project src/Cloner.Cli -- list  # CLI: discos y particiones (solo lectura)
+dotnet run --project src/Cloner.Cli -- plan 1 2                   # plan de clonado, sin escribir
+dotnet run --project src/Cloner.Cli -- clone 1 2 --virtual-only   # clona; pide escribir BORRAR
 dotnet run --project src/Cloner.App          # interfaz; pide elevación (UAC)
 ```
+
+- `plan` y `clone` requieren administrador. Códigos de salida de `clone`: 0 correcto,
+  1 argumentos, 3 bloqueado por las reglas, 4 cancelado, 5 fallo, 6 verificación fallida.
+- `VhdCloneTests` crea VHD fijos con `diskpart` en `%TEMP%\cloner-vhd`, los clona y los borra.
+  Al terminar un clonado, Windows relee la tabla, monta el volumen del clon y escribe metadatos
+  NTFS; y al desmontar un origen montado en escritura, también escribe en él. Por eso la prueba
+  de igualdad monta el origen en solo lectura y demuestra la identidad por hash en el momento de
+  terminar (huella de lo escrito = huella del origen, y verificación del destino), no
+  comparando los archivos VHD enteros después.
+- Las sesiones de desarrollo no son de administrador. Para las pruebas con VHD se lanza
+  `dotnet test tests/Cloner.IntegrationTests --no-build` en un PowerShell elevado
+  (`Start-Process -Verb RunAs`), con permiso del usuario, que acepta el aviso de UAC.
 
 - Las pruebas de integración marcadas con `[AdminFact]` se omiten si la consola no es de
   administrador. Úsalo en toda prueba que monte o escriba discos virtuales.

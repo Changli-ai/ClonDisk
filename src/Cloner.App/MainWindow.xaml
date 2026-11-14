@@ -94,12 +94,15 @@
         <Grid Grid.Row="0" Margin="0,0,0,18">
             <StackPanel>
                 <TextBlock Text="Discos del equipo" FontSize="22" FontWeight="SemiBold" />
-                <TextBlock Text="Vista de solo lectura: aquí no se modifica ningún disco."
+                <TextBlock Text="Elige un disco para ver sus particiones. Esta vista no modifica ningún disco."
                            Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0" />
             </StackPanel>
-            <Button Content="Actualizar" Command="{Binding RefreshCommand}"
-                    Style="{StaticResource PrimaryButton}"
-                    HorizontalAlignment="Right" VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Content="Actualizar" Command="{Binding RefreshCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,10,0" />
+                <Button Content="Clonar disco…" Command="{Binding CloneCommand}"
+                        Style="{StaticResource PrimaryButton}" />
+            </StackPanel>
         </Grid>
 
         <Grid Grid.Row="1">

@@ -74,6 +74,12 @@ public sealed record DiskInfo
     /// <summary>GUID del disco (GPT) o firma en hexadecimal (MBR). Nulo en discos sin inicializar.</summary>
     public string? Identifier { get; init; }
 
+    /// <summary>Ruta de la interfaz del dispositivo en Windows; no cambia mientras el disco siga conectado.</summary>
+    public string? DevicePath { get; init; }
+
+    /// <summary>Ubicación física del disco; en un disco virtual, la ruta de su archivo.</summary>
+    public string? Location { get; init; }
+
     /// <summary>Contiene la partición desde la que se ejecuta Windows.</summary>
     public bool ContainsWindows { get; init; }
 

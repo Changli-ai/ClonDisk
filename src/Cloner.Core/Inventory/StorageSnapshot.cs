@@ -22,6 +22,12 @@ internal sealed record RawDisk
     public ushort HealthStatus { get; init; }
     public uint? Signature { get; init; }
     public string? Guid { get; init; }
+
+    /// <summary>Ruta de la interfaz del dispositivo (<c>\\?\...</c>); única mientras el disco esté conectado.</summary>
+    public string? Path { get; init; }
+
+    /// <summary>Ubicación física; en un disco virtual, la ruta de su archivo.</summary>
+    public string? Location { get; init; }
 }
 
 internal sealed record RawPhysicalDisk
