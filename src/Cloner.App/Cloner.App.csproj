@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Cloner.Core\Cloner.Core.csproj" />
@@ -15,6 +15,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>ClonDisk</AssemblyName>
+    <AssemblyTitle>ClonDisk</AssemblyTitle>
+    <ApplicationIcon>Assets\ClonDisk.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\ClonDisk.ico" />
+  </ItemGroup>
+
+  <PropertyGroup>
   </PropertyGroup>
 
 </Project>

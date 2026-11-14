@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <Version>0.1.0</Version>
+    <Product>ClonDisk</Product>
+    <Company>ClonDisk</Company>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

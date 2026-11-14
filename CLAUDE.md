@@ -1,9 +1,9 @@
-# App de clonación de discos (nombre provisional)
+# ClonDisk
 
-Aplicación de escritorio para Windows 10 y 11 que clona discos y particiones entre HDD y SSD
-(HDD↔SSD, HDD↔HDD, SSD↔SSD; SATA, M.2 y NVMe, internos o por USB), incluido el disco del
-sistema: al retirar el disco original y poner el clon, el equipo debe arrancar y funcionar
-exactamente igual.
+**ClonDisk** es una aplicación de escritorio para Windows 10 y 11 que clona discos y
+particiones entre HDD y SSD (HDD↔SSD, HDD↔HDD, SSD↔SSD; SATA, M.2 y NVMe, internos o por USB),
+incluido el disco del sistema: al retirar el disco original y poner el clon, el equipo debe
+arrancar y funcionar exactamente igual.
 
 **Estado actual:** etapas 0 y 1 completadas. Etapa 2 (clonado sector a sector de un disco de
 datos a otro igual o mayor) implementada en el motor, la CLI y la interfaz. Todas sus pruebas
@@ -113,7 +113,36 @@ Actualiza este archivo cuando una etapa se complete o cambie una decisión.
 - Rendimiento limitado por los discos, no por la app: E/S secuencial con búferes de 1–4 MiB
   alineados a sector, lectura y escritura en hilos separados.
 - La interfaz no se bloquea durante el clonado.
-- Ejecutable firmado e instalador para su distribución.
+- Ejecutable firmado e instalador para su distribución (ver «Producto y distribución»).
+
+## Producto y distribución
+
+Requisitos que la versión final debe cumplir; se completan en la etapa 10, salvo lo que ya
+está hecho.
+
+- RP-01 **Nombre: ClonDisk.** Es el nombre que ve el usuario en todas partes: título de la
+  ventana principal («ClonDisk») y de las demás («Clonar un disco · ClonDisk»), ejecutables
+  (`ClonDisk.exe` para la interfaz y `clondisk-cli.exe` para la CLI: van en la misma carpeta,
+  así que sus nombres no pueden diferir solo en mayúsculas), propiedades del archivo, carpeta de
+  datos (`%LOCALAPPDATA%\ClonDisk`), instalador, accesos directos y desinstalador. Los nombres
+  internos de proyectos y espacios de nombres (`Cloner.*`) se mantienen: son identificadores de
+  código, no se muestran. **Hecho** desde la etapa 2.
+- RP-02 **Icono propio** alusivo a la app: dos unidades de disco superpuestas, la de atrás
+  translúcida (el original) y la de delante opaca (el clon), sobre un cuadrado azul
+  redondeado. Debe verse en el `.exe`, las ventanas, la barra de tareas, los accesos directos
+  y el instalador, y ser legible a 16 px. Archivo: `src/Cloner.App/Assets/ClonDisk.ico`
+  (16 a 256 px), ya incrustado en los dos `.exe` y en las ventanas; falta el instalador.
+- RP-03 **Instalador `.exe`.** ClonDisk se distribuye como un único instalador
+  (`ClonDisk-Setup-<versión>.exe`). En otro equipo basta con ejecutarlo: instala todo lo
+  necesario para que la app funcione, sin instalar .NET aparte, sin compilar nada en ese equipo
+  y sin conexión a internet. Para ello la app se publica ya compilada y **autocontenida**
+  (`dotnet publish -r win-x64 --self-contained`, con el runtime de .NET incluido). El
+  instalador pide elevación, copia los archivos en `Program Files\ClonDisk`, crea los accesos
+  directos del menú Inicio (y, opcionalmente, del escritorio) y registra el desinstalador en
+  «Aplicaciones instaladas».
+- RP-04 El instalador y los ejecutables van firmados con un certificado de firma de código.
+- RP-05 Se comprueba en un Windows 10 y un Windows 11 limpios, sin .NET ni herramientas de
+  desarrollo: instalar, abrir, clonar entre VHD y desinstalar sin dejar restos.
 
 ## Tecnologías
 
@@ -132,7 +161,7 @@ Actualiza este archivo cuando una etapa se complete o cambie una decisión.
 | Verificación | XxHash3 por bloque de 4 MiB y XxHash128 de todo lo escrito (`System.IO.Hashing`) |
 | Registro | `Microsoft.Extensions.Logging` con salida a archivo |
 | Pruebas | xUnit; integración contra discos virtuales VHD/VHDX |
-| Distribución | Manifiesto `requireAdministrator`, firma de código, instalador (por decidir) |
+| Distribución | Publicación autocontenida `win-x64`, instalador `.exe` (herramienta por decidir en la etapa 10; candidata: Inno Setup), manifiesto `requireAdministrator`, firma de código |
 
 ## Arquitectura
 
@@ -189,7 +218,7 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
   (`MemoryDisk`) o archivos (`DiskDevice.OpenFile`), que recorren la misma E/S sin caché.
 - `Devices/DiskDevice` usa CsWin32 solo para funciones y constantes; las estructuras de los
   IOCTL se interpretan a mano en `DeviceDescriptors`, con pruebas.
-- Registro: un archivo por operación en `%LOCALAPPDATA%\Cloner\Registros` (`FileLogger`, con
+- Registro: un archivo por operación en `%LOCALAPPDATA%\ClonDisk\Registros` (`FileLogger`, con
   mensajes `LoggerMessage` en `CloneLog`). La interfaz permite exportarlo.
 - El clon conserva el identificador del disco: con origen y clon conectados a la vez, Windows
   deja uno sin conexión. Elegir identificadores nuevos es la etapa 4 (RF-18).
@@ -214,7 +243,7 @@ cancelación y resultado con exportación del registro.
 | 7 | Modo rescate para discos con fallos | RF-20 a RF-22 | Clon completado con errores de lectura simulados |
 | 8 | Medio de arranque WinPE | RF-40, RF-41 | USB que arranca y clona |
 | 9 | Clon para otro equipo | RF-42 | Clon que arranca en hardware distinto |
-| 10 | Distribución | — | Instalador firmado |
+| 10 | Distribución | RP-01 a RP-05 | `ClonDisk-Setup.exe` firmado que instala y ejecuta la app en un Windows sin .NET |
 
 ## Riesgos y decisiones abiertas
 
@@ -233,7 +262,7 @@ cancelación y resultado con exportación del registro.
   avisar, no garantizar.
 - **Imagen a archivo (VHDX).** No está en el alcance; valorar si se añade como alternativa al
   clon disco a disco para copias de seguridad.
-- Pendiente: nombre definitivo del producto e instalador a usar.
+- Pendiente: herramienta del instalador y certificado de firma de código (etapa 10).
 
 ## Comandos
 

@@ -6,6 +6,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <AssemblyName>clondisk-cli</AssemblyName>
+    <AssemblyTitle>ClonDisk (línea de comandos)</AssemblyTitle>
+    <ApplicationIcon>..\Cloner.App\Assets\ClonDisk.ico</ApplicationIcon>
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

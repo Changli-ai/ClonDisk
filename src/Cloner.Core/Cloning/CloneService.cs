@@ -26,9 +26,9 @@ public sealed class CloneService : ICloneService
         LogDirectory = logDirectory ?? DefaultLogDirectory;
     }
 
-    /// <summary>Carpeta de los registros: %LOCALAPPDATA%\Cloner\Registros.</summary>
+    /// <summary>Carpeta de los registros: %LOCALAPPDATA%\ClonDisk\Registros.</summary>
     public static string DefaultLogDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Cloner", "Registros");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClonDisk", "Registros");
 
     public string LogDirectory { get; }
 

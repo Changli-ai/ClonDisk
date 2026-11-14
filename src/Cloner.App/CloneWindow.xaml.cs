@@ -40,7 +40,7 @@ public partial class CloneWindow : Window, ICloneDialogs
     }
 
     public void ShowError(string message) =>
-        MessageBox.Show(this, message, "Clonar un disco", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show(this, message, "ClonDisk", MessageBoxButton.OK, MessageBoxImage.Error);
 
     protected override void OnClosing(CancelEventArgs e)
     {

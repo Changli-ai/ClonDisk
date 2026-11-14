@@ -30,7 +30,7 @@ switch (command)
         return await CloneCommand.RunAsync(args, execute: true);
 
     case "version" or "--version":
-        Console.WriteLine($"Cloner CLI {version}");
+        Console.WriteLine($"ClonDisk CLI {version}");
         return 0;
 
     case "help" or "--help" or "-h":
@@ -45,9 +45,9 @@ switch (command)
 
 void WriteHelp(TextWriter output)
 {
-    output.WriteLine($"Cloner CLI {version}");
+    output.WriteLine($"ClonDisk CLI {version}");
     output.WriteLine();
-    output.WriteLine("Uso: cloner <comando>");
+    output.WriteLine("Uso: clondisk-cli <comando>");
     output.WriteLine();
     output.WriteLine("  list                        Muestra los discos del equipo y sus particiones (solo lectura).");
     output.WriteLine("  plan <origen> <destino>     Muestra qué haría un clonado, sin escribir nada.");

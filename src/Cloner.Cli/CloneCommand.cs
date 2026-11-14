@@ -23,7 +23,7 @@ internal static class CloneCommand
         if (!TryParse(args, out var source, out var target, out var options, out var error))
         {
             Console.Error.WriteLine(error);
-            Console.Error.WriteLine("Uso: cloner " + (execute ? "clone" : "plan") + " <disco origen> <disco destino> [--no-verify] [--virtual-only]");
+            Console.Error.WriteLine("Uso: clondisk-cli " + (execute ? "clone" : "plan") + " <disco origen> <disco destino> [--no-verify] [--virtual-only]");
             return Usage;
         }
 
