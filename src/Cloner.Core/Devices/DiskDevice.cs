@@ -223,6 +223,9 @@ internal sealed class DiskDevice : IBlockDevice
     /// <summary>Envía un IOCTL o FSCTL sin estructuras de entrada ni de salida.</summary>
     internal static void Control(SafeFileHandle handle, uint code) => Ioctl(handle, code, [], []);
 
+    /// <summary>Envía un IOCTL o FSCTL con una estructura de entrada y sin salida.</summary>
+    internal static void Control(SafeFileHandle handle, uint code, ReadOnlySpan<byte> input) => Ioctl(handle, code, input, []);
+
     internal static SafeFileHandle OpenHandle(string path, uint access, bool unbuffered, string name)
     {
         var flags = unbuffered

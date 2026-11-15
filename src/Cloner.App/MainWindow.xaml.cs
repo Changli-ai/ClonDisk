@@ -19,6 +19,9 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         DataContext = viewModel;
+        SidebarLogo.Source = AppIcon.Largest();
+        SidebarVersion.Text = AppIcon.Version;
+        viewModel.PickDisk = (title, choices) => DiskPickerWindow.Pick(this, title, choices);
         viewModel.ShowCloneWizard = createViewModel =>
         {
             var wizard = new CloneWindow { Owner = this };

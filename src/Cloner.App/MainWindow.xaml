@@ -2,9 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Cloner.App.Controls"
+        xmlns:vm="clr-namespace:Cloner.App.ViewModels"
         Title="ClonDisk"
         Icon="Assets/ClonDisk.ico"
-        Width="1160" Height="760" MinWidth="900" MinHeight="560"
+        Width="1280" Height="800" MinWidth="1100" MinHeight="640"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource WindowBackground}"
         Foreground="{StaticResource TextPrimary}"
@@ -12,6 +13,7 @@
         UseLayoutRounding="True">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <controls:NotVisibleConverter x:Key="NotVisible" />
 
         <!-- Oculta un elemento cuando su DataContext es nulo. -->
         <Style x:Key="HiddenWithoutData" TargetType="FrameworkElement">
@@ -25,7 +27,7 @@
         <DataTemplate x:Key="PropertyRowTemplate">
             <Grid Margin="0,5,16,5">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="135" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding Label}" Foreground="{StaticResource TextSecondary}" />
@@ -83,184 +85,608 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <controls:SectionVisibilityConverter x:Key="SectionVisibility" />
+
+        <!-- Barra lateral: degradado azul propio de ClonDisk. -->
+        <LinearGradientBrush x:Key="SidebarBackground" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#1C5BD6" Offset="0" />
+            <GradientStop Color="#3B86F2" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="SourceTile" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#4C9BFF" Offset="0" />
+            <GradientStop Color="#1F6FEB" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="TargetTile" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#3DD68C" Offset="0" />
+            <GradientStop Color="#16A365" Offset="1" />
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="DashedStroke" Color="#C7D4E8" />
+        <SolidColorBrush x:Key="EmptyCardFill" Color="#F6F9FD" />
+
+        <Style x:Key="NavItem" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Root" Background="Transparent" CornerRadius="8" Margin="0,2">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#22FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#3DFFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Tarjeta grande de origen o destino: todo su contenido es un botón. -->
+        <Style x:Key="CardButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid x:Name="Root" Background="Transparent">
+                            <ContentPresenter />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.92" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ClearButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Width="30" Height="30" CornerRadius="15" Background="Transparent">
+                            <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                       Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#14000000" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PageTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="PageSubtitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+
+        <!-- Aviso de función que todavía no está disponible. -->
+        <Style x:Key="ComingSoon" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource AccentSoft}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Margin" Value="0,16,0,0" />
+        </Style>
+
+        <!-- Tarjeta vacía con borde discontinuo y botón «+». Tag = color del botón. -->
+        <DataTemplate x:Key="EmptyCard">
+            <Grid Width="300" Height="210">
+                <Rectangle RadiusX="14" RadiusY="14" Fill="{StaticResource EmptyCardFill}"
+                           Stroke="{StaticResource DashedStroke}" StrokeThickness="1.5" StrokeDashArray="5 4" />
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Width="52" Height="52" CornerRadius="12" Background="{Binding Tile}" HorizontalAlignment="Center">
+                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="20" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="{Binding Prompt}" Margin="0,14,0,0" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Flecha discontinua entre origen y destino. -->
+        <DataTemplate x:Key="FlowArrow">
+            <Canvas Width="90" Height="20" VerticalAlignment="Center">
+                <Line X1="4" Y1="10" X2="76" Y2="10" Stroke="#A9B6C9" StrokeThickness="2" StrokeDashArray="1.5 2.5" StrokeDashCap="Round" />
+                <Path Data="M 74,4 L 86,10 L 74,16 Z" Fill="#A9B6C9" />
+            </Canvas>
+        </DataTemplate>
+
+        <!-- Tarjeta con un disco o sistema elegido. -->
+        <DataTemplate x:Key="FilledCard" DataType="{x:Type vm:CardContent}">
+            <Border Width="300" Height="210" CornerRadius="14" Background="{StaticResource AccentSoft}"
+                    BorderBrush="#B9D2FA" BorderThickness="1">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="18,0">
+                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="44"
+                               Foreground="{StaticResource Accent}" HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" Margin="0,12,0,0"
+                               HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Details}" Foreground="{StaticResource TextSecondary}" FontSize="12"
+                               Margin="0,4,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Pantalla de copia: título, tarjetas de origen y destino, y «Siguiente». -->
+        <DataTemplate DataType="{x:Type vm:CopyPanelViewModel}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource PageSubtitle}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <!-- Origen -->
+                    <Grid>
+                        <Button Style="{StaticResource CardButton}" Command="{Binding PickSourceCommand}">
+                            <Grid>
+                                <ContentControl Focusable="False" IsTabStop="False" ContentTemplate="{StaticResource EmptyCard}"
+                                                  Visibility="{Binding HasSource, Converter={StaticResource NotVisible}}">
+                                    <ContentControl.Content>
+                                        <vm:EmptyCardContent Prompt="Elige el disco de origen" Tile="{StaticResource SourceTile}" />
+                                    </ContentControl.Content>
+                                </ContentControl>
+                                <ContentControl Focusable="False" IsTabStop="False" Content="{Binding Source}" ContentTemplate="{StaticResource FilledCard}"
+                                                  Visibility="{Binding HasSource, Converter={StaticResource BoolToVisibility}}" />
+                            </Grid>
+                        </Button>
+                        <Button Style="{StaticResource ClearButton}" Command="{Binding ClearSourceCommand}" ToolTip="Quitar"
+                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"
+                                Visibility="{Binding CanClearSource, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+
+                    <ContentPresenter ContentTemplate="{StaticResource FlowArrow}" Margin="22,0" />
+
+                    <!-- Destino -->
+                    <Grid>
+                        <Button Style="{StaticResource CardButton}" Command="{Binding PickTargetCommand}">
+                            <Grid>
+                                <ContentControl Focusable="False" IsTabStop="False" ContentTemplate="{StaticResource EmptyCard}"
+                                                  Visibility="{Binding HasTarget, Converter={StaticResource NotVisible}}">
+                                    <ContentControl.Content>
+                                        <vm:EmptyCardContent Prompt="Elige el disco de destino" Tile="{StaticResource TargetTile}" />
+                                    </ContentControl.Content>
+                                </ContentControl>
+                                <ContentControl Focusable="False" IsTabStop="False" Content="{Binding Target}" ContentTemplate="{StaticResource FilledCard}"
+                                                  Visibility="{Binding HasTarget, Converter={StaticResource BoolToVisibility}}" />
+                            </Grid>
+                        </Button>
+                        <Button Style="{StaticResource ClearButton}" Command="{Binding ClearTargetCommand}" ToolTip="Quitar"
+                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"
+                                Visibility="{Binding HasTarget, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+                </StackPanel>
+
+                <Button Grid.Row="2" Content="Siguiente" Style="{StaticResource PrimaryButton}" Padding="34,10"
+                        Command="{Binding NextCommand}" HorizontalAlignment="Right" />
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
-    <Grid Margin="24,20,24,24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="268" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-        <!-- Cabecera -->
-        <Grid Grid.Row="0" Margin="0,0,0,18">
-            <StackPanel>
-                <TextBlock Text="Discos del equipo" FontSize="22" FontWeight="SemiBold" />
-                <TextBlock Text="Elige un disco para ver sus particiones. Esta vista no modifica ningún disco."
-                           Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button Content="Actualizar" Command="{Binding RefreshCommand}"
-                        Style="{StaticResource SecondaryButton}" Margin="0,0,10,0" />
-                <Button Content="Clonar disco…" Command="{Binding CloneCommand}"
-                        Style="{StaticResource PrimaryButton}" />
-            </StackPanel>
-        </Grid>
+        <!-- Barra lateral -->
+        <Border Background="{StaticResource SidebarBackground}">
+            <DockPanel Margin="14,20,14,16">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,0,22">
+                    <Image x:Name="SidebarLogo" Width="34" Height="34" RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock Text="ClonDisk" Foreground="White" FontSize="20" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Margin="10,0,0,0" />
+                </StackPanel>
 
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" />
-                <ColumnDefinition Width="16" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+                <TextBlock x:Name="SidebarVersion" DockPanel.Dock="Bottom" Foreground="#B3FFFFFF" FontSize="11" Margin="8,0,0,0" />
 
-            <!-- Lista de discos -->
-            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="8">
-                <ListBox ItemsSource="{Binding Disks}" SelectedItem="{Binding SelectedDisk}"
-                         ItemContainerStyle="{StaticResource DiskListItem}"
+                <ListBox ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav}"
+                         ItemContainerStyle="{StaticResource NavItem}"
                          Background="Transparent" BorderThickness="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="12,10">
-                                <TextBlock Text="{Binding Model}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding Summary}" Foreground="{StaticResource TextSecondary}"
-                                           Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
-                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                    <Border Style="{StaticResource Badge}">
-                                        <TextBlock Text="{Binding Heading}" FontSize="11" Foreground="{StaticResource TextSecondary}" />
+                            <StackPanel>
+                                <Border Height="1" Background="#40FFFFFF" Margin="6,6,6,10"
+                                        Visibility="{Binding StartsGroup, Converter={StaticResource BoolToVisibility}}" />
+                                <Grid Margin="10,9">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="28" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                               Foreground="White" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Title}" Foreground="White" FontSize="13.5"
+                                               FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <Border Grid.Column="2" CornerRadius="4" Background="#33FFFFFF" Padding="6,1"
+                                            Visibility="{Binding IsAvailable, Converter={StaticResource NotVisible}}">
+                                        <TextBlock Text="{Binding Badge}" Foreground="White" FontSize="10.5" />
                                     </Border>
-                                    <Border Style="{StaticResource Badge}" Background="{StaticResource Accent}"
-                                            Visibility="{Binding IsSystemDisk, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Sistema" FontSize="11" Foreground="White" />
-                                    </Border>
-                                    <Border Style="{StaticResource Badge}" Background="{StaticResource WarningBackground}"
-                                            BorderBrush="{StaticResource WarningBorder}" BorderThickness="1"
-                                            Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Aviso" FontSize="11" Foreground="{StaticResource WarningText}" />
-                                    </Border>
-                                </StackPanel>
+                                </Grid>
                             </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-            </Border>
+            </DockPanel>
+        </Border>
 
-            <!-- Mensaje de carga, error o lista vacía -->
-            <TextBlock Grid.Column="2" DataContext="{Binding StatusMessage}" Text="{Binding}"
-                       Style="{StaticResource HiddenWithoutData}"
-                       Foreground="{StaticResource TextSecondary}" FontSize="15" TextWrapping="Wrap"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <!-- Contenido de la sección elegida -->
+        <Grid Grid.Column="1" Margin="34,28,34,26">
 
-            <!-- Detalle del disco seleccionado -->
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto"
-                          DataContext="{Binding SelectedDisk}" Style="{StaticResource HiddenWithoutData}">
+            <ContentControl Content="{Binding DiskCopy}"
+                            Visibility="{Binding Section, Converter={StaticResource SectionVisibility}, ConverterParameter=DiskCopy}" />
+
+            <ContentControl Content="{Binding SystemCopy}"
+                            Visibility="{Binding Section, Converter={StaticResource SectionVisibility}, ConverterParameter=SystemCopy}" />
+
+            <!-- Partición (etapa 6) -->
+            <Grid Visibility="{Binding Section, Converter={StaticResource SectionVisibility}, ConverterParameter=PartitionCopy}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <StackPanel>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="{Binding Model}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-                            <TextBlock Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0">
-                                <Run Text="{Binding Heading, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Summary, Mode=OneWay}" />
-                            </TextBlock>
-
-                            <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,8,0,0">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{StaticResource WarningBackground}"
-                                                BorderBrush="{StaticResource WarningBorder}" BorderThickness="1"
-                                                CornerRadius="6" Padding="12,8" Margin="0,6,0,0">
-                                            <TextBlock Text="{Binding}" Foreground="{StaticResource WarningText}" TextWrapping="Wrap" />
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <ItemsControl ItemsSource="{Binding Properties}" Margin="0,14,0,0"
-                                          ItemTemplate="{StaticResource PropertyRowTemplate}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <UniformGrid Columns="2" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
-                            <ItemsControl ItemsSource="{Binding Identity}"
-                                          ItemTemplate="{StaticResource PropertyRowTemplate}" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Style="{StaticResource Card}" Margin="0,16,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Particiones" Style="{StaticResource SectionTitle}" />
-
-                            <!-- Mapa del disco -->
-                            <ItemsControl ItemsSource="{Binding Segments}" Height="52">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <controls:ProportionalPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemContainerStyle>
-                                    <Style TargetType="ContentPresenter">
-                                        <Setter Property="controls:ProportionalPanel.Weight" Value="{Binding Weight}" />
-                                    </Style>
-                                </ItemsControl.ItemContainerStyle>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{Binding Fill}" CornerRadius="4" Margin="1,0"
-                                                Padding="7,0" ToolTip="{Binding ToolTip}">
-                                            <StackPanel VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Label}" Foreground="{Binding Foreground}"
-                                                           FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding SizeText}" Foreground="{Binding Foreground}"
-                                                           FontSize="11" TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <DataGrid ItemsSource="{Binding Partitions}" Margin="0,16,0,0"
-                                      Visibility="{Binding HasPartitions, Converter={StaticResource BoolToVisibility}}"
-                                      AutoGenerateColumns="False" IsReadOnly="True"
-                                      CanUserAddRows="False" CanUserDeleteRows="False"
-                                      CanUserReorderColumns="False" CanUserResizeRows="False" CanUserSortColumns="False"
-                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                                      HorizontalGridLinesBrush="{StaticResource CardBorder}"
-                                      Background="Transparent" RowBackground="Transparent"
-                                      BorderThickness="0" SelectionMode="Single" SelectionUnit="FullRow"
-                                      IsHitTestVisible="False"
-                                      ColumnHeaderStyle="{StaticResource GridHeader}"
-                                      CellStyle="{StaticResource GridCell}"
-                                      Foreground="{StaticResource TextPrimary}">
-                                <DataGrid.Columns>
-                                    <!-- Anchos proporcionales y texto con ajuste de línea: la tabla siempre cabe. -->
-                                    <DataGridTextColumn Header="#" Binding="{Binding Number}" Width="Auto" />
-                                    <DataGridTextColumn Header="Tipo" Binding="{Binding Kind}" Width="1.5*" ElementStyle="{StaticResource GridText}" />
-                                    <DataGridTextColumn Header="Volumen" Binding="{Binding Volume}" Width="1.2*" ElementStyle="{StaticResource GridText}" />
-                                    <DataGridTextColumn Header="Formato" Binding="{Binding FileSystem}" Width="*" ElementStyle="{StaticResource GridText}" />
-                                    <DataGridTextColumn Header="Tamaño" Binding="{Binding Size}" Width="1.1*" ElementStyle="{StaticResource GridText}" />
-                                    <DataGridTextColumn Header="Usado" Binding="{Binding Used}" Width="1.1*" ElementStyle="{StaticResource GridText}" />
-                                    <DataGridTextColumn Header="Cifrado" Binding="{Binding Encryption}" Width="1.3*" ElementStyle="{StaticResource GridText}" />
-                                    <DataGridTextColumn Header="Marcas" Binding="{Binding Flags}" Width="1.5*" ElementStyle="{StaticResource GridText}" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-
-                            <TextBlock Text="Este disco no tiene particiones."
-                                       Foreground="{StaticResource TextSecondary}" Margin="0,14,0,0">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding HasPartitions}" Value="False">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </StackPanel>
+                    <TextBlock Text="Clonar una partición" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="Copia una sola partición a espacio libre o a una partición de otro disco, por ejemplo una unidad externa."
+                               Style="{StaticResource PageSubtitle}" />
+                    <Border Style="{StaticResource ComingSoon}">
+                        <TextBlock Text="Próximamente: el clonado de particiones llegará en una próxima versión." Foreground="{StaticResource Accent}" />
                     </Border>
                 </StackPanel>
-            </ScrollViewer>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" IsEnabled="False" Opacity="0.55">
+                    <ContentControl Focusable="False" IsTabStop="False" ContentTemplate="{StaticResource EmptyCard}">
+                        <ContentControl.Content>
+                            <vm:EmptyCardContent Prompt="Elige la partición de origen" Tile="{StaticResource SourceTile}" />
+                        </ContentControl.Content>
+                    </ContentControl>
+                    <ContentPresenter ContentTemplate="{StaticResource FlowArrow}" Margin="22,0" />
+                    <ContentControl Focusable="False" IsTabStop="False" ContentTemplate="{StaticResource EmptyCard}">
+                        <ContentControl.Content>
+                            <vm:EmptyCardContent Prompt="Elige la partición de destino" Tile="{StaticResource TargetTile}" />
+                        </ContentControl.Content>
+                    </ContentControl>
+                </StackPanel>
+                <Button Grid.Row="2" Content="Siguiente" Style="{StaticResource PrimaryButton}" Padding="34,10" IsEnabled="False" HorizontalAlignment="Right" />
+            </Grid>
+
+            <!-- Migrar a Windows 11 (etapa 11) -->
+            <Grid Visibility="{Binding Section, Converter={StaticResource SectionVisibility}, ConverterParameter=Windows11}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Migrar a Windows 11" Style="{StaticResource PageTitle}" />
+                    <TextBlock Style="{StaticResource PageSubtitle}">
+                        Instala un <Run FontWeight="SemiBold" Text="Windows 11 nuevo" /> en otro disco y lleva a él tus archivos, programas y ajustes.
+                        También en equipos que no cumplen los requisitos de hardware de Windows 11, avisando de lo que implica.
+                    </TextBlock>
+                    <Border Style="{StaticResource ComingSoon}">
+                        <TextBlock Text="Próximamente: la migración a Windows 11 llegará en una próxima versión." Foreground="{StaticResource Accent}" />
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.75">
+                    <Grid Width="120" Height="120">
+                        <Border CornerRadius="16" Background="{StaticResource AccentSoft}" />
+                        <TextBlock Text="&#xE7F4;" FontFamily="Segoe MDL2 Assets" FontSize="58" Foreground="{StaticResource Accent}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Grid>
+                    <ContentPresenter ContentTemplate="{StaticResource FlowArrow}" Margin="34,0" />
+                    <Grid Width="120" Height="120">
+                        <Border CornerRadius="16" Background="{StaticResource AccentSoft}" />
+                        <TextBlock Text="&#xEDA2;" FontFamily="Segoe MDL2 Assets" FontSize="58" Foreground="{StaticResource Accent}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+                <Border Grid.Row="2" Background="{StaticResource SuccessBackground}" CornerRadius="8" Padding="14,9" Margin="0,0,0,14">
+                    <TextBlock Text="Consejo: el proceso suele durar entre 1 y 2 horas y el equipo se reiniciará solo durante la migración."
+                               Foreground="{StaticResource SuccessText}" TextWrapping="Wrap" />
+                </Border>
+                <Button Grid.Row="3" Content="Siguiente" Style="{StaticResource PrimaryButton}" Padding="34,10" IsEnabled="False" HorizontalAlignment="Right" />
+            </Grid>
+
+            <!-- Disco de emergencia (etapa 8) -->
+            <Grid Visibility="{Binding Section, Converter={StaticResource SectionVisibility}, ConverterParameter=EmergencyDisk}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Disco de emergencia" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="Crea un USB de arranque con ClonDisk para arrancar un equipo que no inicia y poner a salvo sus datos."
+                               Style="{StaticResource PageSubtitle}" />
+                    <Border Style="{StaticResource ComingSoon}">
+                        <TextBlock Text="Próximamente: la creación del disco de emergencia llegará en una próxima versión." Foreground="{StaticResource Accent}" />
+                    </Border>
+                </StackPanel>
+                <Grid Grid.Row="1" Margin="0,26,0,0" IsEnabled="False" Opacity="0.6" VerticalAlignment="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <RadioButton Content="USB" GroupName="Media" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" Margin="0,0,0,14" Padding="8,6" IsEditable="True" Text="No se encontró ninguna unidad USB." />
+                    <RadioButton Grid.Row="1" Content="CD/DVD" GroupName="Media" VerticalAlignment="Center" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,0,0,14" Padding="8,6" IsEditable="True" Text="No se encontró ninguna grabadora." />
+                    <RadioButton Grid.Row="2" Content="Crear una ISO" GroupName="Media" IsChecked="True" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Padding="8,6" Text="C:\Users\Usuario\Escritorio\ClonDisk-emergencia.iso" />
+                    <Button Grid.Row="2" Grid.Column="2" Content="Examinar…" Style="{StaticResource PrimaryButton}" Margin="12,0,0,0" />
+                </Grid>
+                <Grid Grid.Row="2">
+                    <Button Content="Añadir controlador" Style="{StaticResource SecondaryButton}" IsEnabled="False" HorizontalAlignment="Left" />
+                    <Button Content="Crear" Style="{StaticResource PrimaryButton}" Padding="34,10" IsEnabled="False" HorizontalAlignment="Right" />
+                </Grid>
+            </Grid>
+
+            <!-- Clonación por red (etapa 12) -->
+            <Grid Visibility="{Binding Section, Converter={StaticResource SectionVisibility}, ConverterParameter=NetworkClone}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Clonación por red" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="Otro equipo de tu red local puede recibir el sistema y los datos de este. Elige cómo arrancará el equipo que recibe la copia:"
+                               Style="{StaticResource PageSubtitle}" />
+                    <Border Style="{StaticResource ComingSoon}">
+                        <TextBlock Text="Próximamente: la clonación por red llegará en una próxima versión." Foreground="{StaticResource Accent}" />
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Margin="0,22,0,0" IsEnabled="False" Opacity="0.6">
+                    <Border CornerRadius="12" Background="{StaticResource AccentSoft}" Padding="18,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <RadioButton GroupName="Network" IsChecked="True" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="&#xE774;" FontFamily="Segoe MDL2 Assets" FontSize="28" Foreground="{StaticResource Accent}"
+                                       Margin="10,0,16,0" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" VerticalAlignment="Center" TextWrapping="Wrap">
+                                El equipo de destino descarga y abre el receptor desde su <Run FontWeight="SemiBold" Text="navegador web" />.
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+                    <Border CornerRadius="12" Background="{StaticResource EmptyCardFill}" Padding="18,16" Margin="0,12,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <RadioButton GroupName="Network" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="&#xE968;" FontFamily="Segoe MDL2 Assets" FontSize="28" Foreground="{StaticResource Accent}"
+                                       Margin="10,0,16,0" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                <TextBlock TextWrapping="Wrap">
+                                    El equipo de destino arranca el receptor por <Run FontWeight="SemiBold" Text="PXE" />, aunque no tenga sistema operativo.
+                                </TextBlock>
+                                <TextBlock Text="Guía para preparar el arranque PXE" Foreground="{StaticResource Accent}" TextDecorations="Underline"
+                                           FontSize="12" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+                <Button Grid.Row="2" Content="Siguiente" Style="{StaticResource PrimaryButton}" Padding="34,10" IsEnabled="False" HorizontalAlignment="Right" />
+            </Grid>
+
+            <!-- Discos del equipo: inspección -->
+            <Grid Visibility="{Binding Section, Converter={StaticResource SectionVisibility}, ConverterParameter=Disks}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Cabecera -->
+                <Grid Grid.Row="0" Margin="0,0,0,18">
+                    <StackPanel>
+                        <TextBlock Text="Discos del equipo" FontSize="22" FontWeight="SemiBold" />
+                        <TextBlock Text="Elige un disco para ver sus particiones. Esta vista no modifica ningún disco."
+                                   Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Content="Actualizar" Command="{Binding RefreshCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="0,0,10,0" />
+                        <Button Content="Clonar disco…" Command="{Binding CloneCommand}"
+                                Style="{StaticResource PrimaryButton}" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="250" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Lista de discos -->
+                    <Border Grid.Column="0" Style="{StaticResource Card}" Padding="8">
+                        <ListBox ItemsSource="{Binding Disks}" SelectedItem="{Binding SelectedDisk}"
+                                 ItemContainerStyle="{StaticResource DiskListItem}"
+                                 Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="12,10">
+                                        <TextBlock Text="{Binding Model}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Summary}" Foreground="{StaticResource TextSecondary}"
+                                                   Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Border Style="{StaticResource Badge}">
+                                                <TextBlock Text="{Binding Heading}" FontSize="11" Foreground="{StaticResource TextSecondary}" />
+                                            </Border>
+                                            <Border Style="{StaticResource Badge}" Background="{StaticResource Accent}"
+                                                    Visibility="{Binding IsSystemDisk, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="Sistema" FontSize="11" Foreground="White" />
+                                            </Border>
+                                            <Border Style="{StaticResource Badge}" Background="{StaticResource WarningBackground}"
+                                                    BorderBrush="{StaticResource WarningBorder}" BorderThickness="1"
+                                                    Visibility="{Binding HasWarnings, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="Aviso" FontSize="11" Foreground="{StaticResource WarningText}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
+                    <!-- Mensaje de carga, error o lista vacía -->
+                    <TextBlock Grid.Column="2" DataContext="{Binding StatusMessage}" Text="{Binding}"
+                               Style="{StaticResource HiddenWithoutData}"
+                               Foreground="{StaticResource TextSecondary}" FontSize="15" TextWrapping="Wrap"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                    <!-- Detalle del disco seleccionado -->
+                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                                  DataContext="{Binding SelectedDisk}" Style="{StaticResource HiddenWithoutData}">
+                        <StackPanel>
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Model}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0">
+                                        <Run Text="{Binding Heading, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Summary, Mode=OneWay}" />
+                                    </TextBlock>
+
+                                    <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,8,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{StaticResource WarningBackground}"
+                                                        BorderBrush="{StaticResource WarningBorder}" BorderThickness="1"
+                                                        CornerRadius="6" Padding="12,8" Margin="0,6,0,0">
+                                                    <TextBlock Text="{Binding}" Foreground="{StaticResource WarningText}" TextWrapping="Wrap" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <ItemsControl ItemsSource="{Binding Properties}" Margin="0,14,0,0"
+                                                  ItemTemplate="{StaticResource PropertyRowTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Columns="2" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding Identity}"
+                                                  ItemTemplate="{StaticResource PropertyRowTemplate}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Particiones" Style="{StaticResource SectionTitle}" />
+
+                                    <!-- Mapa del disco -->
+                                    <ItemsControl ItemsSource="{Binding Segments}" Height="52">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <controls:ProportionalPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Setter Property="controls:ProportionalPanel.Weight" Value="{Binding Weight}" />
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{Binding Fill}" CornerRadius="4" Margin="1,0"
+                                                        Padding="7,0" ToolTip="{Binding ToolTip}">
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Label}" Foreground="{Binding Foreground}"
+                                                                   FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding SizeText}" Foreground="{Binding Foreground}"
+                                                                   FontSize="11" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <DataGrid ItemsSource="{Binding Partitions}" Margin="0,16,0,0"
+                                              Visibility="{Binding HasPartitions, Converter={StaticResource BoolToVisibility}}"
+                                              AutoGenerateColumns="False" IsReadOnly="True"
+                                              CanUserAddRows="False" CanUserDeleteRows="False"
+                                              CanUserReorderColumns="False" CanUserResizeRows="False" CanUserSortColumns="False"
+                                              HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                              HorizontalGridLinesBrush="{StaticResource CardBorder}"
+                                              Background="Transparent" RowBackground="Transparent"
+                                              BorderThickness="0" SelectionMode="Single" SelectionUnit="FullRow"
+                                              IsHitTestVisible="False"
+                                              ColumnHeaderStyle="{StaticResource GridHeader}"
+                                              CellStyle="{StaticResource GridCell}"
+                                              Foreground="{StaticResource TextPrimary}">
+                                        <DataGrid.Columns>
+                                            <!-- Anchos proporcionales y texto con ajuste de línea: la tabla siempre cabe. -->
+                                            <DataGridTextColumn Header="#" Binding="{Binding Number}" Width="Auto" />
+                                            <DataGridTextColumn Header="Tipo" Binding="{Binding Kind}" Width="1.5*" ElementStyle="{StaticResource GridText}" />
+                                            <DataGridTextColumn Header="Volumen" Binding="{Binding Volume}" Width="1.2*" ElementStyle="{StaticResource GridText}" />
+                                            <DataGridTextColumn Header="Formato" Binding="{Binding FileSystem}" Width="*" ElementStyle="{StaticResource GridText}" />
+                                            <DataGridTextColumn Header="Tamaño" Binding="{Binding Size}" Width="1.1*" ElementStyle="{StaticResource GridText}" />
+                                            <DataGridTextColumn Header="Usado" Binding="{Binding Used}" Width="1.1*" ElementStyle="{StaticResource GridText}" />
+                                            <DataGridTextColumn Header="Cifrado" Binding="{Binding Encryption}" Width="1.3*" ElementStyle="{StaticResource GridText}" />
+                                            <DataGridTextColumn Header="Marcas" Binding="{Binding Flags}" Width="1.5*" ElementStyle="{StaticResource GridText}" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+
+                                    <TextBlock Text="Este disco no tiene particiones."
+                                               Foreground="{StaticResource TextSecondary}" Margin="0,14,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasPartitions}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
         </Grid>
     </Grid>
 </Window>

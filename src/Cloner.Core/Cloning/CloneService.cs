@@ -94,7 +94,7 @@ public sealed class CloneService : ICloneService
             }
             else
             {
-                var executor = new CloneExecutor(new Win32DiskAccess(plan.Options.VirtualTargetOnly), log);
+                var executor = new CloneExecutor(new Win32DiskAccess(plan.Options.VirtualTargetOnly, _inventory), log);
                 result = executor.Execute(plan, progress, cancellationToken);
             }
         }

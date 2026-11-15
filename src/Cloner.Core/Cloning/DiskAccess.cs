@@ -21,6 +21,9 @@ internal interface IDiskAccess
 
     /// <summary>Abre en solo lectura un volumen montado de un disco de solo lectura.</summary>
     IVolumeSource OpenVolume(string volumePath, int sectorSize);
+
+    /// <summary>Trabajo sobre el clon montado, después de copiar.</summary>
+    ITargetFinisher Finisher { get; }
 }
 
 /// <summary>Un volumen que se puede leer: una instantánea o un volumen que no puede cambiar.</summary>
@@ -49,8 +52,10 @@ internal interface ISnapshotSet : IDisposable
 }
 
 /// <summary>Acceso real a los discos del equipo. Requiere administrador.</summary>
-internal sealed class Win32DiskAccess(bool virtualTargetOnly) : IDiskAccess
+internal sealed class Win32DiskAccess(bool virtualTargetOnly, IDiskInventory inventory) : IDiskAccess
 {
+    public ITargetFinisher Finisher { get; } = new TargetFinisher(inventory);
+
     public IBlockDevice Open(DiskIdentity disk, bool writable)
     {
         var device = DiskDevice.OpenDisk(disk.Number, writable);

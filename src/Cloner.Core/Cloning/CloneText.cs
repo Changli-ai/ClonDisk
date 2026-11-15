@@ -69,6 +69,39 @@ public static class CloneText
             : string.Create(Culture, $"{minutes}:{rest:00}");
     }
 
+    /// <summary>
+    /// Cómo quedan las particiones en el destino, una línea por partición que cambia de posición
+    /// o tamaño; vacío si la distribución es la del origen.
+    /// </summary>
+    public static IReadOnlyList<string> Layout(ClonePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (!plan.Layout.Changes)
+        {
+            return [];
+        }
+
+        return plan.Layout.Placements.Select(placement =>
+        {
+            var partition = placement.Partition;
+            var name = partition.DriveLetter is { } letter ? $"{letter}:" : partition.Volume?.Label ?? InventoryText.Kind(partition.Kind);
+            var size = placement.Grows
+                ? $"{ByteSize.Format(partition.SizeBytes, Culture)} → {ByteSize.Format(placement.TargetSize, Culture)}"
+                : ByteSize.Format(partition.SizeBytes, Culture);
+            var position = placement.Moves
+                ? $", se mueve de {ByteSize.Format(partition.OffsetBytes, Culture)} a {ByteSize.Format(placement.TargetOffset, Culture)} del inicio"
+                : string.Empty;
+            return $"Partición {partition.Number} ({name}): {size}{position}";
+        }).ToList();
+    }
+
+    public static string Sizing(Cloner.Core.Layout.SizeMode mode) => mode switch
+    {
+        Cloner.Core.Layout.SizeMode.ExtendMain => "ampliar la partición principal",
+        Cloner.Core.Layout.SizeMode.Proportional => "repartir el espacio entre las particiones de datos",
+        _ => "mantener los tamaños",
+    };
+
     /// <summary>Una partición tal como se presenta en la lista de lo que se va a borrar.</summary>
     public static string Partition(PartitionInfo partition)
     {

@@ -10,7 +10,7 @@ public partial class SplashWindow : Window
     public SplashWindow()
     {
         InitializeComponent();
-        Logo.Source = LargestIconFrame();
+        Logo.Source = AppIcon.Largest();
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
         VersionText.Text = $"Versión {version}";
     }
@@ -22,8 +22,12 @@ public partial class SplashWindow : Window
         set => StatusText.Text = value;
     }
 
-    /// <summary>El icono tiene varios tamaños; para el logotipo se usa el mayor.</summary>
-    private static BitmapFrame LargestIconFrame()
+}
+
+/// <summary>El icono de la app tiene varios tamaños; para el logotipo se usa el mayor.</summary>
+internal static class AppIcon
+{
+    public static BitmapFrame Largest()
     {
         var decoder = BitmapDecoder.Create(
             new Uri("pack://application:,,,/ClonDisk;component/Assets/ClonDisk.ico"),
@@ -31,4 +35,7 @@ public partial class SplashWindow : Window
             BitmapCacheOption.OnLoad);
         return decoder.Frames.OrderByDescending(frame => frame.PixelWidth).First();
     }
+
+    public static string Version =>
+        $"Versión {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0"}";
 }

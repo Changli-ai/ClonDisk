@@ -1,4 +1,5 @@
 using Cloner.Core.Inventory;
+using Cloner.Core.Layout;
 using Cloner.Core.PartitionTables;
 
 namespace Cloner.Core.Cloning;
@@ -14,6 +15,15 @@ public sealed record CloneOptions
 
     /// <summary>Modo de copia (RF-12). Por defecto, la copia inteligente.</summary>
     public CloneMode Mode { get; init; } = CloneMode.UsedBlocks;
+
+    /// <summary>Uso del espacio sobrante cuando el destino es mayor (RF-13).</summary>
+    public SizeMode Sizing { get; init; } = SizeMode.Keep;
+
+    /// <summary>Alineación de las particiones a 1 MiB (RF-16). Por defecto, solo en SSD.</summary>
+    public AlignmentMode Alignment { get; init; } = AlignmentMode.Auto;
+
+    /// <summary>El clon recibe identificadores de disco y de partición nuevos (RF-18).</summary>
+    public bool NewIdentifiers { get; init; }
 }
 
 /// <summary>Modo de copia (RF-12).</summary>
@@ -71,7 +81,15 @@ public sealed record CloneStep(CloneStepKind Kind, long Offset, long Length, str
     /// <summary>Bytes que se espera escribir; con copia inteligente, menos que <see cref="Length"/>.</summary>
     public long EstimatedBytes { get; init; } = -1;
 
+    /// <summary>Posición del origen de la que se lee; si la partición se mueve, distinta de <see cref="Offset"/>.</summary>
+    public long SourceOffset { get; init; } = -1;
+
     internal long ExpectedBytes => EstimatedBytes >= 0 ? EstimatedBytes : Length;
+
+    internal long ReadOffset => SourceOffset >= 0 ? SourceOffset : Offset;
+
+    /// <summary>La partición se escribe en otra posición del destino.</summary>
+    public bool Moves => SourceOffset >= 0 && SourceOffset != Offset;
 }
 
 /// <summary>
@@ -101,6 +119,24 @@ public sealed record ClonePlan
 
     /// <summary>La tabla GPT se ajusta al tamaño del destino, que es mayor que el origen.</summary>
     public bool AdjustsGpt { get; init; }
+
+    /// <summary>Posición y tamaño de cada partición en el destino (RF-13, RF-16).</summary>
+    public TargetLayout Layout { get; init; } = new() { Placements = [] };
+
+    /// <summary>Identificadores nuevos del clon (RF-18), o nulo si conserva los del origen.</summary>
+    public TableIdentity? NewIdentity { get; init; }
+
+    /// <summary>La tabla del destino se genera de nuevo en lugar de copiarse.</summary>
+    public bool RebuildsTable => Layout.Changes || NewIdentity is not null;
+
+    /// <summary>
+    /// Al terminar la copia hay trabajo sobre el clon montado: ampliar sistemas de archivos o
+    /// rehacer su arranque si es un disco de Windows con otros identificadores o posiciones.
+    /// </summary>
+    public bool NeedsFinishing =>
+        Layout.Placements.Any(p => p.Grows)
+        || NewIdentity is not null
+        || (Source.PartitionStyle == PartitionStyle.Mbr && Layout.Placements.Any(p => p.Moves));
 
     public required IReadOnlyList<string> Warnings { get; init; }
 

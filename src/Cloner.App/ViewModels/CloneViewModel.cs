@@ -4,6 +4,7 @@ using System.IO;
 using Cloner.Core;
 using Cloner.Core.Cloning;
 using Cloner.Core.Inventory;
+using Cloner.Core.Layout;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -63,7 +64,7 @@ public sealed partial class CloneViewModel : ObservableObject
     private readonly ICloneDialogs _dialogs;
     private CancellationTokenSource? _cancellation;
 
-    public CloneViewModel(ICloneService service, IReadOnlyList<DiskInfo> disks, int? preferredSource, ICloneDialogs dialogs)
+    public CloneViewModel(ICloneService service, IReadOnlyList<DiskInfo> disks, int? preferredSource, ICloneDialogs dialogs, int? preferredTarget = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(disks);
@@ -74,9 +75,11 @@ public sealed partial class CloneViewModel : ObservableObject
         Disks = disks.Select(DiskChoice.From).ToList();
         Source = Disks.FirstOrDefault(d => d.Number == preferredSource)
             ?? Disks.FirstOrDefault(d => !disks.First(x => x.Number == d.Number).IsSystemDisk);
-        Target = Disks.FirstOrDefault(d => d != Source && !disks.First(x => x.Number == d.Number).IsSystemDisk);
+        Target = Disks.FirstOrDefault(d => d.Number == preferredTarget && d != Source)
+            ?? Disks.FirstOrDefault(d => d != Source && !disks.First(x => x.Number == d.Number).IsSystemDisk);
         Verify = true;
         UseSmartCopy = true;
+        Sizing = SizeMode.ExtendMain;
         Stage = CloneStage.Select;
     }
 
@@ -104,6 +107,51 @@ public sealed partial class CloneViewModel : ObservableObject
         set => UseSmartCopy = !value;
     }
 
+    /// <summary>Uso del espacio sobrante si el destino es mayor (RF-13).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(KeepSizes), nameof(ExtendMain), nameof(SpreadSpace))]
+    public partial SizeMode Sizing { get; set; }
+
+    public bool KeepSizes
+    {
+        get => Sizing == SizeMode.Keep;
+        set
+        {
+            if (value)
+            {
+                Sizing = SizeMode.Keep;
+            }
+        }
+    }
+
+    public bool ExtendMain
+    {
+        get => Sizing == SizeMode.ExtendMain;
+        set
+        {
+            if (value)
+            {
+                Sizing = SizeMode.ExtendMain;
+            }
+        }
+    }
+
+    public bool SpreadSpace
+    {
+        get => Sizing == SizeMode.Proportional;
+        set
+        {
+            if (value)
+            {
+                Sizing = SizeMode.Proportional;
+            }
+        }
+    }
+
+    /// <summary>El clon recibe identificadores nuevos (RF-18).</summary>
+    [ObservableProperty]
+    public partial bool NewIdentifiers { get; set; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSelecting), nameof(IsReviewing), nameof(IsRunning), nameof(IsFinished))]
     public partial CloneStage Stage { get; set; }
@@ -130,6 +178,10 @@ public sealed partial class CloneViewModel : ObservableObject
     public string CopySummary { get; private set; } = string.Empty;
     public IReadOnlyList<string> Warnings { get; private set; } = [];
     public bool HasWarnings => Warnings.Count > 0;
+
+    /// <summary>Cómo quedan las particiones en el destino, si cambian.</summary>
+    public IReadOnlyList<string> LayoutLines { get; private set; } = [];
+    public bool HasLayout => LayoutLines.Count > 0;
     public string ConfirmText { get; private set; } = string.Empty;
 
     [ObservableProperty]
@@ -194,7 +246,13 @@ public sealed partial class CloneViewModel : ObservableObject
         {
             var source = Source!.Number;
             var target = Target!.Number;
-            var options = new CloneOptions { Verify = Verify, Mode = UseSmartCopy ? CloneMode.UsedBlocks : CloneMode.SectorBySector };
+            var options = new CloneOptions
+            {
+                Verify = Verify,
+                Mode = UseSmartCopy ? CloneMode.UsedBlocks : CloneMode.SectorBySector,
+                Sizing = Sizing,
+                NewIdentifiers = NewIdentifiers,
+            };
             var result = await Task.Run(() => _service.CreatePlan(source, target, options));
             if (result.Plan is not { } plan)
             {
@@ -302,6 +360,7 @@ public sealed partial class CloneViewModel : ObservableObject
         CopySummary = $"{CloneText.CopyAmount(plan)}. "
             + (plan.Options.Verify ? "Al terminar se comprobará que el destino coincide." : "No se verificará al terminar.");
         Warnings = plan.Warnings;
+        LayoutLines = CloneText.Layout(plan);
         ConfirmText = $"Entiendo que se borrará todo el contenido del disco {plan.Target.Number}.";
         ConfirmErase = false;
 
@@ -309,6 +368,7 @@ public sealed partial class CloneViewModel : ObservableObject
         {
             nameof(Plan), nameof(SourceSummary), nameof(TargetSummary), nameof(EraseTitle), nameof(ErasedItems),
             nameof(CopySummary), nameof(Warnings), nameof(HasWarnings), nameof(ConfirmText),
+            nameof(LayoutLines), nameof(HasLayout),
         })
         {
             OnPropertyChanged(name);

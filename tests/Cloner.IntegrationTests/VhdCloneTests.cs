@@ -3,6 +3,7 @@ using Cloner.Core;
 using Cloner.Core.Cloning;
 using Cloner.Core.Devices;
 using Cloner.Core.Inventory;
+using Cloner.Core.Layout;
 using Cloner.Core.PartitionTables;
 
 namespace Cloner.IntegrationTests;
@@ -109,7 +110,8 @@ public sealed class VhdCloneTests : IDisposable
         var expected = WriteSampleFile(source);
         var sourceInfo = source.Info();
 
-        var (_, result) = await Clone(source, target);
+        // Windows informa algunos VHD como SSD; sin esto, la alineación automática (RF-16) movería la partición.
+        var (_, result) = await Clone(source, target, new CloneOptions { Alignment = AlignmentMode.Never });
         Assert.True(result.Outcome == CloneOutcome.Succeeded, result.Message);
         Assert.True(result.Verified, result.Message);
 
@@ -158,6 +160,51 @@ public sealed class VhdCloneTests : IDisposable
     }
 
     [AdminFact]
+    public async Task ExtendedCloneFillsTheLargerDiskAndKeepsFiles()
+    {
+        var source = NewDisk("origen.vhd", 64, label: "ORIGEN");
+        var target = NewDisk("destino.vhd", 128);
+        var expected = WriteSampleFile(source);
+        var sourceInfo = source.Info();
+
+        var (plan, result) = await Clone(source, target, new CloneOptions { Sizing = SizeMode.ExtendMain });
+
+        Assert.True(result.Outcome == CloneOutcome.Succeeded, result.Message);
+        Assert.True(result.Verified, result.Message);
+        Assert.Contains(plan.Layout.Placements, p => p.Grows);
+
+        source.Detach();
+        target.Detach();
+        target.Attach();
+        var clone = target.Info();
+
+        // Conserva el identificador del origen y la partición ocupa casi todo el disco nuevo.
+        Assert.Equal(sourceInfo.Identifier, clone.Identifier);
+        var partition = clone.Partitions.Single(p => p.Volume?.Label == "ORIGEN");
+        Assert.True(partition.SizeBytes > 120L * 1024 * 1024, $"La partición mide {partition.SizeBytes} bytes.");
+        Assert.True(partition.Volume!.SizeBytes > 120L * 1024 * 1024, $"El volumen NTFS mide {partition.Volume.SizeBytes} bytes.");
+        Assert.Equal(expected, File.ReadAllBytes(Path.Combine(partition.Volume.Path, "muestra.bin")));
+    }
+
+    [AdminFact]
+    public async Task CloneWithNewIdentifiersStaysOnlineNextToTheOriginal()
+    {
+        var source = NewDisk("origen.vhd", 64, label: "ORIGEN");
+        var target = NewDisk("destino.vhd", 64);
+        var expected = WriteSampleFile(source);
+        var sourceInfo = source.Info();
+
+        var (_, result) = await Clone(source, target, new CloneOptions { NewIdentifiers = true });
+
+        Assert.True(result.Outcome == CloneOutcome.Succeeded, result.Message);
+        var clone = target.Info();
+        Assert.NotEqual(sourceInfo.Identifier, clone.Identifier);
+        Assert.False(clone.IsOffline, "Con identificadores nuevos, Windows no debe dejar el clon sin conexión.");
+        var volume = clone.Partitions.Single(p => p.Volume?.Label == "ORIGEN").Volume!;
+        Assert.Equal(expected, File.ReadAllBytes(Path.Combine(volume.Path, "muestra.bin")));
+    }
+
+    [AdminFact]
     public void PhysicalDisksAreRejectedInVirtualOnlyMode()
     {
         var source = NewDisk("origen.vhd", 64, label: "ORIGEN");
@@ -199,10 +246,13 @@ public sealed class VhdCloneTests : IDisposable
         return data;
     }
 
-    private async Task<(ClonePlan Plan, CloneResult Result)> Clone(VirtualDisk source, VirtualDisk target, CloneMode mode = CloneMode.UsedBlocks)
+    private Task<(ClonePlan Plan, CloneResult Result)> Clone(VirtualDisk source, VirtualDisk target, CloneMode mode = CloneMode.UsedBlocks) =>
+        Clone(source, target, new CloneOptions { Mode = mode });
+
+    private async Task<(ClonePlan Plan, CloneResult Result)> Clone(VirtualDisk source, VirtualDisk target, CloneOptions options)
     {
         var service = new CloneService(new DiskInventory(), _directory);
-        var planned = service.CreatePlan(source.Number, target.Number, new CloneOptions { VirtualTargetOnly = true, Mode = mode });
+        var planned = service.CreatePlan(source.Number, target.Number, options with { VirtualTargetOnly = true });
         Assert.True(planned.Plan is not null, string.Join(" ", planned.Problems));
 
         // Doble comprobación antes de escribir: el destino es el VHD de esta prueba.

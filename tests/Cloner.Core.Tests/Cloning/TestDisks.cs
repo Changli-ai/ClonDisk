@@ -291,6 +291,10 @@ internal sealed class FakeDiskAccess : IDiskAccess
         return new FakeSnapshotSet(this, Snapshots.Count - 1, frozen);
     }
 
+    public FakeFinisher FakeFinisher { get; } = new();
+
+    public ITargetFinisher Finisher => FakeFinisher;
+
     public IVolumeSource OpenVolume(string volumePath, int sectorSize)
     {
         var (disk, offset, size, used) = Volumes[volumePath];
@@ -331,6 +335,35 @@ internal sealed class FakeDiskAccess : IDiskAccess
         {
         }
     }
+}
+
+/// <summary>Remate falso: «monta» los volúmenes al instante y registra lo que se le pide.</summary>
+internal sealed class FakeFinisher : ITargetFinisher
+{
+    public List<(string Volume, long Bytes)> Extended { get; } = [];
+    public List<BootRepair> Repairs { get; } = [];
+    public List<long> WaitedOffsets { get; } = [];
+    public int QuietWaits { get; private set; }
+
+    /// <summary>Desplazamiento (en el destino) del volumen que contiene Windows, o nulo.</summary>
+    public long? WindowsAt { get; set; }
+
+    public static string VolumeAt(long offset) => $@"\\?\Volume{{clon-{offset}}}\";
+
+    public IReadOnlyDictionary<long, string> WaitForVolumes(int diskNumber, IReadOnlyCollection<long> partitionOffsets)
+    {
+        WaitedOffsets.AddRange(partitionOffsets);
+        return partitionOffsets.ToDictionary(o => o, VolumeAt);
+    }
+
+    public void ExtendVolume(string volumePath, long partitionBytes, int sectorSize) => Extended.Add((volumePath, partitionBytes));
+
+    public string? FindWindowsVolume(IEnumerable<string> volumePaths) =>
+        WindowsAt is { } offset && volumePaths.Contains(VolumeAt(offset)) ? VolumeAt(offset) : null;
+
+    public void RepairBoot(BootRepair repair) => Repairs.Add(repair);
+
+    public void WaitBeforeRemovingVolumes() => QuietWaits++;
 }
 
 /// <summary>Recoge los avisos de progreso en el mismo hilo, sin contexto de sincronización.</summary>

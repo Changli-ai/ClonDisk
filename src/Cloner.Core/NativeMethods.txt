@@ -18,3 +18,12 @@ VssFreeSnapshotPropertiesInternal
 IVssBackupComponents
 IVssAsync
 VSS_SNAPSHOT_CONTEXT
+FSCTL_EXTEND_VOLUME
+GetLogicalDrives
+SetVolumeMountPoint
+DeleteVolumeMountPoint
+RegLoadKey
+RegUnLoadKey
+OpenProcessToken
+LookupPrivilegeValue
+AdjustTokenPrivileges

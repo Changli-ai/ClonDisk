@@ -39,6 +39,18 @@ internal static partial class CloneLog
     [LoggerMessage(Level = LogLevel.Information, Message = "Copia terminada: {Bytes} bytes escritos. Huella XxHash128: {Hash}.")]
     public static partial void CopyFinished(ILogger logger, long bytes, string? hash);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Windows montó {Count} volúmenes del clon.")]
+    public static partial void CloneMounted(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Ampliada {Partition} a {Bytes} bytes.")]
+    public static partial void VolumeExtended(ILogger logger, string partition, long bytes);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Arranque del clon rehecho con bcdboot; {Count} valores de MountedDevices traducidos.")]
+    public static partial void BootRepaired(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Escrita la tabla definitiva con los identificadores del origen.")]
+    public static partial void FinalIdentity(ILogger logger);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Verificación correcta.")]
     public static partial void VerificationPassed(ILogger logger);
 

@@ -4,6 +4,7 @@ using System.IO.Hashing;
 using System.Runtime.ExceptionServices;
 using Cloner.Core.Devices;
 using Cloner.Core.Inventory;
+using Cloner.Core.Layout;
 using Cloner.Core.Logging;
 using Cloner.Core.PartitionTables;
 using Microsoft.Extensions.Logging;
@@ -50,6 +51,16 @@ internal sealed class CloneExecutor
             target = _access.Open(plan.Target, writable: true);
             CheckDevices(plan, source, target);
             var head = ReadSourceHead(source, plan);
+
+            // Si hay que montar el clon para ajustarlo y debe conservar los identificadores del
+            // origen, se copia con identificadores provisionales: con los del origen, Windows lo
+            // dejaría sin conexión. Los definitivos se ponen al final.
+            var targetSectors = plan.Target.SizeBytes / plan.Target.SectorSize;
+            var temporary = plan.NeedsFinishing && plan.NewIdentity is null;
+            var copyIdentity = temporary ? TableIdentity.CreateNew(plan.SourceTable.Style, plan.SourcePartitions) : plan.NewIdentity;
+            var built = plan.RebuildsTable
+                ? TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, plan.Source.SectorSize, copyIdentity)
+                : null;
             CheckTargetTable(target, plan);
             cancellation.ThrowIfCancellationRequested();
 
@@ -65,7 +76,7 @@ internal sealed class CloneExecutor
                 meter = new ProgressMeter(ranges.Sum(r => r.Length) + (plan.Options.Verify ? dataBytes : 0), _time);
 
                 state.Phase = ClonePhase.Copying;
-                var written = Copy(plan, ranges, source, target, head, state, meter, progress, cancellation);
+                var written = Copy(plan, ranges, source, target, head, built, volumes, state, meter, progress, cancellation);
                 target.Flush();
                 state.TargetComplete = true;
                 CloneLog.CopyFinished(_log, state.BytesWritten, state.DataHash);
@@ -93,6 +104,11 @@ internal sealed class CloneExecutor
             }
 
             state.Phase = ClonePhase.Finishing;
+            if (plan.NeedsFinishing)
+            {
+                FinishClone(plan, target, head, temporary, progress);
+            }
+
             progress?.Report(meter.Snapshot(ClonePhase.Finishing, "Terminando"));
             return Finish(state, started, CloneOutcome.Succeeded, state.Verified
                 ? "El destino es idéntico a lo leído del origen."
@@ -111,9 +127,11 @@ internal sealed class CloneExecutor
         {
             CloneLog.CloneError(_log, ex);
             var reason = ex is IOException or UnauthorizedAccessException or CloneException ? ex.Message : $"Error inesperado: {ex.Message}";
-            var message = reason.TrimEnd('.') + "." + (state.TargetModified
-                ? " El destino ha quedado incompleto y sin tabla de particiones."
-                : " No se ha escrito nada en el destino.");
+            var message = reason.TrimEnd('.') + "." + (state.TargetComplete
+                ? " La copia de los datos terminó y se verificó, pero el clon no se pudo ajustar."
+                : state.TargetModified
+                    ? " El destino ha quedado incompleto y sin tabla de particiones."
+                    : " No se ha escrito nada en el destino.");
             return Finish(state, started, CloneOutcome.Failed, message);
         }
         finally
@@ -213,7 +231,7 @@ internal sealed class CloneExecutor
             switch (step.Kind)
             {
                 case CloneStepKind.Copy:
-                    ranges.Add(new CopyRange(step, disk, step.Offset, step.Offset, step.Length));
+                    ranges.Add(new CopyRange(step, disk, step.ReadOffset, step.Offset, step.Length));
                     break;
 
                 case CloneStepKind.CopyPartition:
@@ -241,13 +259,14 @@ internal sealed class CloneExecutor
         var partitionStart = partition.OffsetBytes;
         if (!volumes.ByPartition.TryGetValue(partition, out var volume))
         {
-            ranges.Add(new CopyRange(step, disk, step.Offset, step.Offset, step.Length));
+            ranges.Add(new CopyRange(step, disk, step.ReadOffset, step.Offset, step.Length));
             return;
         }
 
-        // Tramos relativos al principio de la partición.
-        var from = step.Offset - partitionStart;
-        var to = step.End - partitionStart;
+        // Tramos relativos al principio de la partición; en el destino empieza en targetStart.
+        var from = step.ReadOffset - partitionStart;
+        var to = from + step.Length;
+        var targetStart = step.Offset - from;
         var deviceEnd = volume.Length;
         var used = step.UsedBlocksOnly ? volume.ReadUsedRanges() : null;
 
@@ -270,13 +289,13 @@ internal sealed class CloneExecutor
             var inVolumeEnd = Math.Min(end, deviceEnd);
             if (inVolumeEnd > start)
             {
-                ranges.Add(new CopyRange(step, volume.Device, start, partitionStart + start, inVolumeEnd - start));
+                ranges.Add(new CopyRange(step, volume.Device, start, targetStart + start, inVolumeEnd - start));
             }
 
             var rawStart = Math.Max(start, deviceEnd);
             if (end > rawStart)
             {
-                ranges.Add(new CopyRange(step, disk, partitionStart + rawStart, partitionStart + rawStart, end - rawStart));
+                ranges.Add(new CopyRange(step, disk, partitionStart + rawStart, targetStart + rawStart, end - rawStart));
             }
         }
     }
@@ -329,6 +348,8 @@ internal sealed class CloneExecutor
         IBlockDevice source,
         IBlockDevice target,
         byte[] head,
+        BuiltTable? built,
+        VolumeSources volumes,
         RunState state,
         ProgressMeter meter,
         IProgress<CloneProgress>? progress,
@@ -357,7 +378,7 @@ internal sealed class CloneExecutor
                 {
                     try
                     {
-                        Produce(plan, ranges, source, head, zeros, free, full, written, overall, token);
+                        Produce(plan, ranges, source, head, built, volumes, zeros, free, full, written, overall, token);
                     }
                     catch (Exception ex)
                     {
@@ -435,6 +456,8 @@ internal sealed class CloneExecutor
         List<CopyRange> ranges,
         IBlockDevice source,
         byte[] head,
+        BuiltTable? built,
+        VolumeSources volumes,
         AlignedBuffer zeros,
         BlockingCollection<AlignedBuffer> free,
         BlockingCollection<Chunk> full,
@@ -477,11 +500,16 @@ internal sealed class CloneExecutor
 
                     case CloneStepKind.CopyPartition:
                         range.Source!.Read(range.SourceOffset + (offset - range.TargetOffset), data);
+                        if (step.Moves)
+                        {
+                            PatchBootSectors(step, offset, data, plan.Source.SectorSize);
+                        }
+
                         item = DescribePartition(step.Partition!);
                         break;
 
                     case CloneStepKind.WriteBackupGpt:
-                        var backup = PartitionTable.BuildBackupGpt(head, plan.SourceTable.Gpt!, targetSectors);
+                        var backup = built?.Backup ?? PartitionTable.BuildBackupGpt(head, plan.SourceTable.Gpt!, targetSectors);
                         if (backup.Length != step.Length || length != step.Length)
                         {
                             throw new InvalidOperationException("El tamaño de la GPT de respaldo no coincide con el plan.");
@@ -504,11 +532,16 @@ internal sealed class CloneExecutor
                             throw new CloneException("La tabla de particiones del origen ha cambiado durante la copia.");
                         }
 
-                        if (plan.AdjustsGpt)
+                        if (built is not null)
+                        {
+                            built.Head.CopyTo(data);
+                        }
+                        else if (plan.AdjustsGpt)
                         {
                             PartitionTable.AdjustPrimaryGpt(data, plan.SourceTable.Gpt!, targetSectors);
                         }
 
+                        OverlayPartitionHeads(plan, source, volumes, data);
                         break;
                 }
 
@@ -516,6 +549,137 @@ internal sealed class CloneExecutor
                 overall.Append(data);
                 full.Add(new Chunk(buffer, length, offset, IsClear: false, item), token);
             }
+        }
+    }
+
+    /// <summary>
+    /// La parte de cada partición que cae dentro del primer MiB del destino se escribe con la
+    /// tabla, al final (RS-05). Se lee de la misma fuente que el resto de la partición (su
+    /// instantánea, si la tiene), para que el clon sea coherente.
+    /// </summary>
+    private static void OverlayPartitionHeads(ClonePlan plan, IBlockDevice disk, VolumeSources volumes, Span<byte> data)
+    {
+        var sectorSize = plan.Source.SectorSize;
+        var headLength = data.Length;
+        foreach (var placement in plan.Layout.Placements.Where(p => p.TargetOffset < headLength))
+        {
+            var partition = placement.Partition;
+            var length = (int)Math.Min(partition.SizeBytes, data.Length - placement.TargetOffset);
+            using var buffer = new AlignedBuffer(length);
+            if (volumes.ByPartition.TryGetValue(partition, out var volume) && volume.Length >= length)
+            {
+                volume.Device.Read(0, buffer.Span);
+            }
+            else
+            {
+                disk.Read(partition.OffsetBytes, buffer.Span);
+            }
+
+            var slice = data.Slice((int)placement.TargetOffset, length);
+            buffer.Span.CopyTo(slice);
+            if (placement.Moves)
+            {
+                BootSector.SetHiddenSectors(slice[..sectorSize], placement.TargetOffset / sectorSize);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Una partición movida guarda en su sector de arranque (y en la copia del final) dónde
+    /// empieza: se actualiza al copiar el bloque que lo contiene.
+    /// </summary>
+    private static void PatchBootSectors(CloneStep step, long chunkOffset, Span<byte> data, int sectorSize)
+    {
+        var partition = step.Partition!;
+        var targetStart = step.Offset - (step.ReadOffset - partition.OffsetBytes);
+        foreach (var relative in new[] { 0L, partition.SizeBytes - sectorSize })
+        {
+            var position = targetStart + relative;
+            if (position >= chunkOffset && position + sectorSize <= chunkOffset + data.Length)
+            {
+                BootSector.SetHiddenSectors(data.Slice((int)(position - chunkOffset), sectorSize), targetStart / sectorSize);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Trabajo con el clon montado (RF-13, RF-18): ampliar los NTFS que crecen, rehacer el
+    /// arranque de un clon de Windows con otros identificadores o posiciones y, si se copió con
+    /// identificadores provisionales, poner los definitivos.
+    /// </summary>
+    private void FinishClone(ClonePlan plan, IBlockDevice target, byte[] head, bool temporary, IProgress<CloneProgress>? progress)
+    {
+        var finisher = _access.Finisher;
+        var sectorSize = plan.Source.SectorSize;
+        var targetSectors = plan.Target.SizeBytes / plan.Target.SectorSize;
+
+        Report(progress, ClonePhase.Finishing, "Esperando a que Windows monte el clon");
+        target.Flush();
+        target.RefreshLayout();
+        var offsets = plan.Layout.Placements.Where(p => p.Partition.Volume is not null).Select(p => p.TargetOffset).ToList();
+        var volumes = finisher.WaitForVolumes(plan.Target.Number, offsets);
+        CloneLog.CloneMounted(_log, volumes.Count);
+
+        foreach (var placement in plan.Layout.Placements.Where(p => p.Grows))
+        {
+            var name = DescribePartition(placement.Partition);
+            Report(progress, ClonePhase.Finishing, $"Ampliando {name}");
+            finisher.ExtendVolume(volumes[placement.TargetOffset], placement.TargetSize, sectorSize);
+            CloneLog.VolumeExtended(_log, name, placement.TargetSize);
+        }
+
+        var windows = finisher.FindWindowsVolume(volumes.Values);
+        var mbrMoves = plan.SourceTable.Gpt is null && plan.Layout.Placements.Any(p => p.Moves);
+        if (windows is not null && (plan.NewIdentity is not null || mbrMoves))
+        {
+            Report(progress, ClonePhase.Finishing, "Rehaciendo el arranque del clon");
+            var uefi = plan.SourceTable.Gpt is not null;
+            var systemPlacement = uefi
+                ? plan.Layout.Placements.FirstOrDefault(p => p.Partition.Kind == PartitionKind.EfiSystem)
+                : plan.Layout.Placements.FirstOrDefault(p => p.Partition.IsActive);
+            var system = systemPlacement is not null && volumes.TryGetValue(systemPlacement.TargetOffset, out var path) ? path : windows;
+            var map = MountedDevices.Map(head, plan.SourceTable, plan.Layout, plan.NewIdentity, sectorSize);
+            finisher.RepairBoot(new BootRepair(windows, system, uefi, map));
+            CloneLog.BootRepaired(_log, map.Count);
+        }
+
+        if (temporary)
+        {
+            Report(progress, ClonePhase.Finishing, "Poniendo los identificadores definitivos");
+            finisher.WaitBeforeRemovingVolumes();
+            var refs = volumes.Values.Select(v => new VolumeRef(v, "del clon")).ToList();
+            using (_access.LockVolumes(refs, dismount: true))
+            {
+                var final = TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, sectorSize, plan.NewIdentity);
+                if (final.Backup is { } backup)
+                {
+                    WriteChecked(target, target.Length - backup.Length, backup);
+                }
+
+                // Solo cambian los bytes de la tabla; el resto del primer MiB ya tiene sus datos.
+                var tableBytes = PartitionTable.TableBytes(plan.SourceTable, sectorSize);
+                var current = ReadBytes(target, 0, PartitionTable.HeadBytes);
+                final.Head.AsSpan(0, tableBytes).CopyTo(current);
+                WriteChecked(target, 0, current);
+                target.Flush();
+            }
+
+            target.RefreshLayout();
+            CloneLog.FinalIdentity(_log);
+        }
+    }
+
+    /// <summary>Escribe y relee para comprobar que el destino guarda exactamente esos bytes.</summary>
+    private static void WriteChecked(IBlockDevice target, long offset, byte[] data)
+    {
+        using var buffer = new AlignedBuffer(data.Length);
+        data.CopyTo(buffer.Span);
+        target.Write(offset, buffer.Span);
+        buffer.Span.Clear();
+        target.Read(offset, buffer.Span);
+        if (!buffer.Span.SequenceEqual(data))
+        {
+            throw new CloneException($"La tabla de particiones escrita en el byte {offset} no coincide al releerla.");
         }
     }
 

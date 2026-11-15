@@ -5,7 +5,14 @@ particiones entre HDD y SSD (HDD↔SSD, HDD↔HDD, SSD↔SSD; SATA, M.2 y NVMe, 
 incluido el disco del sistema: al retirar el disco original y poner el clon, el equipo debe
 arrancar y funcionar exactamente igual.
 
-**Estado actual:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
+**Etapa 4 (ajuste de particiones, RF-13/16/18) implementada:** distribución en el destino,
+tabla reconstruida, ampliación de NTFS e identificadores nuevos con reparación del arranque.
+Pasan 158 pruebas unitarias y las 17 de integración como administrador (incluidas ampliar un
+VHD de 64 a 128 MB y clonar con identificadores nuevos junto al original). Sin probar: la
+reparación del arranque de un clon de Windows con identificadores nuevos, que queda para la
+prueba manual del usuario. Falta que el usuario dé la etapa por buena.
+
+**Estado anterior:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
 sistema en caliente): instantáneas VSS, copia inteligente, planificador y ejecutor hechos. Pasan
 las 134 pruebas unitarias y las 15 de integración como administrador (con VSS real sobre VHD).
 
@@ -17,6 +24,7 @@ a un destino 680 KB mayor), pero copiar y escribir en el mismo SSD QLC (Intel 66
 MB/s y se canceló al 12 %. Recomendación para la prueba: destino en otro disco, al menos 1 MiB
 mayor que el origen (el formato VHD redondea su tamaño hacia abajo); en VirtualBox, máquina con
 EFI y controladora NVMe. La etapa no está completa hasta que el usuario confirme que arranca.
+El 15/11/2026 el usuario decidió empezar la etapa 4 con esta prueba aún pendiente.
 
 Si el proceso de clonado se termina a la fuerza (no cancelado), sus instantáneas no
 persistentes quedan hasta el siguiente reinicio: `vssadmin delete shadows` no puede borrar las
@@ -134,6 +142,17 @@ Actualiza este archivo cuando una etapa se complete o cambie una decisión.
 - RF-33 Registro (log) detallado de cada operación, exportable.
 - RF-34 Acción opcional al terminar: apagar, suspender o nada.
 
+### Migración a Windows 11 y clonación por red (añadidas el 15/11/2026, etapas 11 y 12)
+- RF-50 Migrar a Windows 11: instalar un Windows 11 limpio en un disco nuevo y llevar a él los
+  datos, programas y ajustes del sistema actual. Opción de instalarlo en equipos que no cumplen
+  los requisitos de hardware de Windows 11, avisando de sus consecuencias (actualizaciones y
+  soporte).
+- RF-51 El proceso puede reiniciar el equipo; debe explicar la duración aproximada (1–2 h) y
+  continuar solo tras los reinicios.
+- RF-60 Clonación por red: otro equipo recibe el sistema y los datos de este por la red local.
+- RF-61 Dos formas de arrancar el receptor: descargándolo con el navegador del equipo de
+  destino, o por arranque PXE en un equipo sin sistema operativo.
+
 ### Medio de arranque y otro equipo
 - RF-40 Crear un USB de arranque WinPE que incluya la herramienta.
 - RF-41 Desde ese medio, clonar discos sin Windows en ejecución.
@@ -193,6 +212,26 @@ está hecho.
 - RP-04 El instalador y los ejecutables van firmados con un certificado de firma de código.
 - RP-05 Se comprueba en un Windows 10 y un Windows 11 limpios, sin .NET ni herramientas de
   desarrollo: instalar, abrir, clonar entre VHD y desinstalar sin dejar restos.
+
+## Diseño de la interfaz (15/11/2026)
+
+El usuario mostró cómo quiere que se vea el producto final. Se toma su **estructura**, con la
+identidad visual propia de ClonDisk (colores, iconos, ilustraciones y textos propios, según las
+reglas de trabajo):
+
+- Barra lateral a la izquierda, en azul, con los modos: Disco, Sistema y Partición; separador;
+  Migrar a Windows 11, Disco de emergencia y Clonación por red. Los que aún no existen se
+  muestran como «Próximamente».
+- Cada modo ocupa el área derecha: título, una frase de explicación y dos tarjetas grandes
+  —origen y destino— unidas por una flecha. Vacías, tienen borde discontinuo, fondo claro y un
+  botón «+» (azul para el origen, verde para el destino); al elegir, muestran el disco o el
+  sistema elegido y una «×» para quitarlo. Botón «Siguiente» abajo a la derecha, desactivado
+  hasta completar la selección.
+- Modo Sistema: el origen ya viene elegido (el Windows en uso y sus particiones); solo se elige
+  el destino.
+- Disco de emergencia: elegir USB, CD/DVD o crear una ISO (ruta y «Examinar…»), botón
+  «Añadir controlador» y «Crear».
+- Clonación por red: elegir entre receptor por navegador o arranque PXE, con guía.
 
 ## Tecnologías
 
@@ -279,20 +318,49 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
   - El ejecutor convierte los pasos en tramos (`CopyRange`) con su dispositivo de origen antes
     de copiar; las instantáneas se liberan al terminar la copia, antes de verificar.
   - Leído desde una instantánea, un volumen con BitLocker queda sin cifrar en el clon (aviso).
+- Distribución e identificadores (`Cloner.Core/Layout`, etapa 4):
+  - `LayoutPlanner` decide dónde va cada partición: alineación a 1 MiB si el destino es SSD o se
+    pide (`AlignmentMode`, RF-16) y uso del espacio sobrante (`SizeMode`: mantener, ampliar la
+    principal —la de Windows o la NTFS de datos mayor— o repartir entre las NTFS de datos,
+    RF-13). Las que van detrás de una que crece se desplazan (la de recuperación queda al
+    final). No mueve particiones lógicas MBR.
+  - Si la distribución cambia o se piden identificadores nuevos (RF-18), el plan es de «tabla
+    reconstruida»: cada partición se copia entera a su posición nueva (`CloneStep.SourceOffset`)
+    y `TableBuilder` genera la tabla a partir de las entradas reales del origen (mismos tipos,
+    atributos y nombres). Al mover una partición se actualiza el campo de sectores ocultos de su
+    sector de arranque NTFS/FAT32 (`BootSector`).
+  - Remate con el clon montado (`ITargetFinisher`, `Devices/TargetFinisher`): ampliar los NTFS
+    que crecen con `FSCTL_EXTEND_VOLUME`; si el clon es de Windows y cambian sus identificadores
+    (o se mueven particiones en MBR), traducir `MountedDevices` en su registro (`RegLoadKey`) y
+    rehacer el BCD con `bcdboot`. Si el clon debe conservar los identificadores del origen,
+    se copia con unos provisionales (con los del origen Windows lo dejaría sin conexión), se
+    hace el remate, se esperan 90 s (volsnap) y se escribe la tabla definitiva.
+  - La reparación del arranque con identificadores nuevos no está probada arrancando un clon:
+    queda para la prueba manual del usuario.
 - `IDiskAccess`/`IBlockDevice` se sustituyen en las pruebas por discos en memoria
   (`MemoryDisk`) o archivos (`DiskDevice.OpenFile`), que recorren la misma E/S sin caché.
 - `Devices/DiskDevice` usa CsWin32 solo para funciones y constantes; las estructuras de los
   IOCTL se interpretan a mano en `DeviceDescriptors`, con pruebas.
 - Registro: un archivo por operación en `%LOCALAPPDATA%\ClonDisk\Registros` (`FileLogger`, con
   mensajes `LoggerMessage` en `CloneLog`). La interfaz permite exportarlo.
-- El clon conserva el identificador del disco: con origen y clon conectados a la vez, Windows
-  deja uno sin conexión. Elegir identificadores nuevos es la etapa 4 (RF-18).
+- Por defecto el clon conserva el identificador del disco: con origen y clon conectados a la
+  vez, Windows deja uno sin conexión. Con identificadores nuevos (etapa 4, RF-18) pueden
+  convivir.
 - `CloneOptions.VirtualTargetOnly` (CLI: `--virtual-only`) solo admite destinos VHD/VHDX; las
   pruebas de integración y cualquier prueba manual durante el desarrollo deben usarlo.
 
-Interfaz: el botón «Clonar disco…» abre `CloneWindow` (`CloneViewModel`), un asistente con
-cuatro fases: elegir discos (y el modo de copia), revisar el plan con lo que se borrará y
-confirmar, progreso con cancelación y resultado con exportación del registro.
+Interfaz (rediseñada el 15/11/2026, ver «Diseño de la interfaz»): `MainWindow` tiene una barra
+lateral (`NavItem`, `AppSection`) y una sección a la derecha, elegida con
+`SectionVisibilityConverter`. Disco y Sistema usan `CopyPanelViewModel`: tarjetas de origen y
+destino (`CardContent`), selector `DiskPickerWindow` y «Siguiente», que abre `CloneWindow`
+(`CloneViewModel`) con ambos discos ya elegidos. El asistente tiene cuatro fases: opciones (modo
+de copia, uso del espacio sobrante e identificadores nuevos), revisión del plan con lo que se
+borrará y la distribución en el destino, progreso con cancelación y resultado con exportación
+del registro. Partición, Migrar a Windows 11, Disco de emergencia y Clonación por red muestran
+su pantalla desactivada con «Próximamente». «Discos del equipo» es la vista de inspección de
+la etapa 1. Los iconos son glifos de Segoe MDL2 Assets. Ojo: un `ContentPresenter` con
+`Content` explícito toma ese contenido como su propio `DataContext`; para tarjetas con
+plantilla se usa `ContentControl`.
 
 Arranque de la interfaz: `App.OnStartup` (sin `StartupUri`) muestra `SplashWindow`, la pantalla
 de carga (logotipo, nombre, barra indeterminada, estado y versión), mientras lee los discos con
@@ -314,6 +382,8 @@ el `MainViewModel`; se ve al menos 1,5 s y después abre `MainWindow` con los da
 | 8 | Medio de arranque WinPE | RF-40, RF-41 | USB que arranca y clona |
 | 9 | Clon para otro equipo | RF-42 | Clon que arranca en hardware distinto |
 | 10 | Distribución | RP-01 a RP-05 | `ClonDisk-Setup.exe` firmado que instala y ejecuta la app en un Windows sin .NET |
+| 11 | Migración a Windows 11 | RF-50, RF-51 | Equipo con Windows 10 migrado a un Windows 11 nuevo con sus datos y programas |
+| 12 | Clonación por red | RF-60, RF-61 | Equipo de destino que recibe el clon por red, desde el navegador y por PXE |
 
 ## Riesgos y decisiones abiertas
 
@@ -348,6 +418,7 @@ dotnet run --project src/Cloner.Cli -- list  # CLI: discos y particiones (solo l
 dotnet run --project src/Cloner.Cli -- plan 1 2                   # plan de clonado, sin escribir
 dotnet run --project src/Cloner.Cli -- clone 1 2 --virtual-only   # clona; pide escribir BORRAR
                                              # --sector: sector a sector; --no-verify: sin verificar
+                                             # --extend | --proportional; --align | --no-align; --new-ids
                                              # sin consola: cmd /c "echo BORRAR| clondisk-cli clone …"
 dotnet run --project src/Cloner.App          # interfaz; pide elevación (UAC)
 ```

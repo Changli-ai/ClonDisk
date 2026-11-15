@@ -56,6 +56,11 @@ void WriteHelp(TextWriter output)
     output.WriteLine("                              Borra todo el destino; pide confirmación antes de escribir.");
     output.WriteLine("      --sector                Copia sector a sector, también el espacio libre.");
     output.WriteLine("                              Sin esta opción solo se copian los bloques en uso.");
+    output.WriteLine("      --extend                Si el destino es mayor, amplía la partición principal.");
+    output.WriteLine("      --proportional          Si el destino es mayor, reparte el espacio entre las de datos.");
+    output.WriteLine("      --align / --no-align    Alinea las particiones a 1 MiB siempre / nunca (por defecto,");
+    output.WriteLine("                              solo si el destino es un SSD).");
+    output.WriteLine("      --new-ids               Da identificadores nuevos al clon para usarlo junto al original.");
     output.WriteLine("      --no-verify             No relee el destino para compararlo al terminar.");
     output.WriteLine("      --virtual-only          Solo admite destinos virtuales (VHD/VHDX), para pruebas.");
     output.WriteLine("  version                     Muestra la versión.");

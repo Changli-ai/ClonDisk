@@ -195,6 +195,8 @@ public sealed class RawIoTests : IDisposable
         public IVolumeSource OpenVolume(string volumePath, int sectorSize) =>
             throw new NotSupportedException("Las imágenes de archivo no tienen volúmenes.");
 
+        public ITargetFinisher Finisher => throw new NotSupportedException("Las imágenes de archivo no se montan.");
+
         private sealed class Nothing : IDisposable
         {
             public void Dispose()

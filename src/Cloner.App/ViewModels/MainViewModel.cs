@@ -6,7 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Cloner.App.ViewModels;
 
-/// <summary>Pantalla de inspección: lista de discos y detalle del seleccionado.</summary>
+/// <summary>Ventana principal: barra lateral con los modos, paneles de copia y vista de los discos.</summary>
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly IDiskInventory _inventory;
@@ -19,7 +19,36 @@ public sealed partial class MainViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(cloneService);
         _inventory = inventory;
         _cloneService = cloneService;
+        SelectedNav = NavItem.All[0];
+        DiskCopy = new CopyPanelViewModel(
+            "Clonar un disco",
+            "Elige el disco de origen y el de destino: ClonDisk copia todo su contenido, particiones incluidas.",
+            systemMode: false,
+            () => _disks,
+            (title, choices) => PickDisk?.Invoke(title, choices),
+            StartWizardAsync);
+        SystemCopy = new CopyPanelViewModel(
+            "Migrar el sistema",
+            "Pasa Windows, tus programas y tus archivos a otro disco, con Windows en marcha. Solo tienes que elegir el destino.",
+            systemMode: true,
+            () => _disks,
+            (title, choices) => PickDisk?.Invoke(title, choices),
+            StartWizardAsync);
     }
+
+    public IReadOnlyList<NavItem> NavItems { get; } = NavItem.All;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Section))]
+    public partial NavItem SelectedNav { get; set; }
+
+    public AppSection Section => SelectedNav.Section;
+
+    public CopyPanelViewModel DiskCopy { get; }
+    public CopyPanelViewModel SystemCopy { get; }
+
+    /// <summary>La ventana lo asigna: muestra un selector de discos y devuelve el elegido, o nulo.</summary>
+    public Func<string, IReadOnlyList<DiskChoice>, DiskChoice?>? PickDisk { get; set; }
 
     /// <summary>
     /// La ventana lo asigna para abrir el asistente de clonado de forma modal. Recibe una
@@ -62,6 +91,8 @@ public sealed partial class MainViewModel : ObservableObject
             SelectedDisk = Disks.FirstOrDefault(d => d.Number == selectedNumber) ?? Disks.FirstOrDefault();
             StatusMessage = Disks.Count == 0 ? "No se encontró ningún disco." : null;
             CloneCommand.NotifyCanExecuteChanged();
+            DiskCopy.Refresh();
+            SystemCopy.Refresh();
         }
         catch (DiskInventoryException ex)
         {
@@ -74,6 +105,13 @@ public sealed partial class MainViewModel : ObservableObject
         {
             HasLoaded = true;
         }
+    }
+
+    private async Task StartWizardAsync(int source, int target)
+    {
+        var disks = _disks;
+        ShowCloneWizard?.Invoke(dialogs => new CloneViewModel(_cloneService, disks, source, dialogs, target));
+        await RefreshAsync();
     }
 
     private bool CanClone => _disks.Count >= 2;

@@ -2,6 +2,7 @@ using System.Globalization;
 using Cloner.Core;
 using Cloner.Core.Cloning;
 using Cloner.Core.Inventory;
+using Cloner.Core.Layout;
 
 namespace Cloner.Cli;
 
@@ -23,7 +24,7 @@ internal static class CloneCommand
         if (!TryParse(args, out var source, out var target, out var options, out var error))
         {
             Console.Error.WriteLine(error);
-            Console.Error.WriteLine("Uso: clondisk-cli " + (execute ? "clone" : "plan") + " <disco origen> <disco destino> [--sector] [--no-verify] [--virtual-only]");
+            Console.Error.WriteLine("Uso: clondisk-cli " + (execute ? "clone" : "plan") + " <disco origen> <disco destino> [--sector] [--extend|--proportional] [--align|--no-align] [--new-ids] [--no-verify] [--virtual-only]");
             return Usage;
         }
 
@@ -81,6 +82,17 @@ internal static class CloneCommand
 
         output.WriteLine();
         output.WriteLine($"  {CloneText.CopyAmount(plan)}. Verificación al terminar: {(plan.Options.Verify ? "sí" : "no")}.");
+
+        var layout = CloneText.Layout(plan);
+        if (layout.Count > 0)
+        {
+            output.WriteLine();
+            output.WriteLine($"  Particiones en el destino ({CloneText.Sizing(plan.Options.Sizing)}):");
+            foreach (var line in layout)
+            {
+                output.WriteLine($"    - {line}");
+            }
+        }
 
         if (plan.Warnings.Count > 0)
         {
@@ -162,6 +174,21 @@ internal static class CloneCommand
                     break;
                 case "--sector":
                     options = options with { Mode = CloneMode.SectorBySector };
+                    break;
+                case "--extend":
+                    options = options with { Sizing = SizeMode.ExtendMain };
+                    break;
+                case "--proportional":
+                    options = options with { Sizing = SizeMode.Proportional };
+                    break;
+                case "--align":
+                    options = options with { Alignment = AlignmentMode.Always };
+                    break;
+                case "--no-align":
+                    options = options with { Alignment = AlignmentMode.Never };
+                    break;
+                case "--new-ids":
+                    options = options with { NewIdentifiers = true };
                     break;
                 case "--virtual-only":
                     options = options with { VirtualTargetOnly = true };

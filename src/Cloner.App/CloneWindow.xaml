@@ -126,6 +126,24 @@
                         </StackPanel>
                     </Border>
 
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Si el destino es mayor" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+                            <RadioButton IsChecked="{Binding ExtendMain}" GroupName="Sizing" Content="Ampliar la partición principal (recomendado)" FontWeight="SemiBold" />
+                            <TextBlock Text="La partición de Windows, o la de datos más grande, crece hasta ocupar el espacio sobrante."
+                                       Style="{StaticResource Hint}" Margin="20,2,0,8" />
+                            <RadioButton IsChecked="{Binding SpreadSpace}" GroupName="Sizing" Content="Repartir el espacio entre las particiones de datos" FontWeight="SemiBold" />
+                            <TextBlock Text="Cada partición de datos NTFS crece en proporción a su tamaño."
+                                       Style="{StaticResource Hint}" Margin="20,2,0,8" />
+                            <RadioButton IsChecked="{Binding KeepSizes}" GroupName="Sizing" Content="Mantener los tamaños" FontWeight="SemiBold" />
+                            <TextBlock Text="El espacio sobrante queda sin asignar. Si el destino es un SSD, las particiones se alinean a 1 MiB en cualquier caso."
+                                       Style="{StaticResource Hint}" Margin="20,2,0,14" />
+                            <CheckBox IsChecked="{Binding NewIdentifiers}" Content="Dar identificadores nuevos al clon" FontWeight="SemiBold" />
+                            <TextBlock Text="Para usar el clon conectado a la vez que el original. Si es un disco de Windows, se rehace su arranque al terminar."
+                                       Style="{StaticResource Hint}" Margin="20,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
                     <Border Background="{StaticResource DangerBackground}" BorderBrush="{StaticResource DangerBorder}"
                             BorderThickness="1" CornerRadius="8" Padding="16,12" Margin="0,12,0,0">
                         <Border.Style>
@@ -189,6 +207,14 @@
 
                     <Border Style="{StaticResource Card}" Margin="0,12,0,0" Padding="16">
                         <TextBlock Text="{Binding CopySummary}" TextWrapping="Wrap" />
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0" Padding="16"
+                            Visibility="{Binding HasLayout, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Text="Particiones en el destino" FontWeight="SemiBold" />
+                            <ItemsControl ItemsSource="{Binding LayoutLines}" ItemTemplate="{StaticResource BulletTemplate}" Margin="0,4,0,0" />
+                        </StackPanel>
                     </Border>
 
                     <Border Background="{StaticResource WarningBackground}" BorderBrush="{StaticResource WarningBorder}"

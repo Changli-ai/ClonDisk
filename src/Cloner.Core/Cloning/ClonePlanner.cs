@@ -1,5 +1,6 @@
 using System.Globalization;
 using Cloner.Core.Inventory;
+using Cloner.Core.Layout;
 using Cloner.Core.PartitionTables;
 
 namespace Cloner.Core.Cloning;
@@ -50,11 +51,22 @@ internal static class ClonePlanner
 
         if (problems.Count > 0 || sourceTable is null)
         {
-            return new ClonePlanResult { Problems = problems, Warnings = BuildWarnings(source, target, []) };
+            return new ClonePlanResult { Problems = problems, Warnings = BuildWarnings(source, target, [], TargetLayout.Same(source.Partitions), newIdentifiers: false) };
         }
 
-        var steps = BuildSteps(source, target.SizeBytes, sourceTable, environment, options, problems);
-        var warnings = BuildWarnings(source, target, steps);
+        // RF-13, RF-16, RF-18: distribución e identificadores del destino.
+        var layoutWarnings = new List<string>();
+        var layout = LayoutPlanner.Plan(source, target, sourceTable, options.Sizing, options.Alignment, problems, layoutWarnings);
+        var identity = options.NewIdentifiers && sourceTable.Style != PartitionStyle.Raw
+            ? TableIdentity.CreateNew(sourceTable.Style, source.Partitions)
+            : null;
+        var rebuild = layout.Changes || identity is not null;
+
+        var steps = rebuild
+            ? BuildRebuiltSteps(source, target.SizeBytes, sourceTable, layout, environment, options)
+            : BuildSteps(source, target.SizeBytes, sourceTable, environment, options, problems);
+        var warnings = BuildWarnings(source, target, steps, layout, identity is not null);
+        warnings.AddRange(layoutWarnings);
         if (problems.Count > 0)
         {
             return new ClonePlanResult { Problems = problems, Warnings = warnings };
@@ -70,7 +82,9 @@ internal static class ClonePlanner
             SourcePartitions = source.Partitions,
             TargetPartitions = target.Partitions,
             Steps = steps,
-            AdjustsGpt = sourceTable.Gpt is not null && target.SizeBytes > source.SizeBytes,
+            AdjustsGpt = sourceTable.Gpt is not null && (target.SizeBytes > source.SizeBytes || rebuild),
+            Layout = rebuild ? layout : TargetLayout.Same(source.Partitions),
+            NewIdentity = identity,
             Warnings = warnings,
             SourceTable = sourceTable,
         };
@@ -188,7 +202,7 @@ internal static class ClonePlanner
         }
     }
 
-    private static List<string> BuildWarnings(DiskInfo source, DiskInfo target, IReadOnlyList<CloneStep> steps)
+    private static List<string> BuildWarnings(DiskInfo source, DiskInfo target, IReadOnlyList<CloneStep> steps, TargetLayout layout, bool newIdentifiers)
     {
         var warnings = new List<string>();
 
@@ -218,14 +232,29 @@ internal static class ClonePlanner
             warnings.Add("Hay particiones cifradas con BitLocker: se copian cifradas y el clon se abrirá con la misma contraseña o clave de recuperación.");
         }
 
-        if (source.Identifier is not null)
+        if (newIdentifiers)
+        {
+            warnings.Add("El clon recibirá identificadores de disco y de partición nuevos: podrá estar conectado a la vez que el original. Si es un disco de Windows, su arranque se rehace al terminar.");
+        }
+        else if (source.Identifier is not null)
         {
             warnings.Add("El clon tendrá el mismo identificador de disco que el origen: si ambos quedan conectados a la vez, Windows dejará uno de los dos sin conexión.");
         }
 
-        var extra = target.SizeBytes - source.SizeBytes;
-        if (extra > 0)
+        foreach (var placement in layout.Placements.Where(p => p.Grows))
         {
+            warnings.Add($"La partición {placement.Partition.Number} ({VolumeName(placement.Partition)}) pasa de {Size(placement.Partition.SizeBytes)} a {Size(placement.TargetSize)}: su sistema de archivos se amplía al terminar la copia.");
+        }
+
+        if (layout.Aligned)
+        {
+            warnings.Add("Las particiones se recolocan alineadas a 1 MiB, lo recomendado en un SSD.");
+        }
+
+        var unused = target.SizeBytes - source.SizeBytes - layout.Placements.Sum(p => p.Growth);
+        if (unused > 0 && !layout.Placements.Any(p => p.Grows))
+        {
+            var extra = unused;
             warnings.Add(source.PartitionStyle == PartitionStyle.Gpt
                 ? $"El destino es mayor: la tabla GPT se ajusta a su tamaño y los {Size(extra)} sobrantes quedan sin asignar."
                 : $"El destino es mayor: los {Size(extra)} sobrantes quedan sin asignar.");
@@ -310,6 +339,60 @@ internal static class ClonePlanner
             0,
             head,
             adjustGpt ? "Escribir la tabla de particiones, ajustada al tamaño del destino" : "Escribir la tabla de particiones"));
+        return steps;
+    }
+
+    /// <summary>
+    /// Pasos cuando la tabla se genera de nuevo (particiones movidas o ampliadas, o identificadores
+    /// nuevos): cada partición se copia entera a su posición en el destino, el espacio sin
+    /// particionar no se copia y la tabla nueva se escribe al final (RS-05).
+    /// </summary>
+    private static List<CloneStep> BuildRebuiltSteps(
+        DiskInfo source,
+        long targetBytes,
+        PartitionTableInfo table,
+        TargetLayout layout,
+        CloneEnvironment environment,
+        CloneOptions options)
+    {
+        long head = PartitionTable.HeadBytes;
+        var tailClearStart = Math.Max(head, targetBytes - TailClearBytes);
+        var steps = new List<CloneStep>
+        {
+            new(CloneStepKind.Clear, 0, head, "Borrar la tabla de particiones del destino"),
+            new(CloneStepKind.Clear, tailClearStart, targetBytes - tailClearStart, "Borrar el final del destino"),
+        };
+
+        foreach (var placement in layout.Placements)
+        {
+            var partition = placement.Partition;
+            var step = PartitionStep(source, partition, partition.OffsetBytes, partition.OffsetBytes + partition.SizeBytes, environment, options);
+            var change = placement.Moves ? (placement.Grows ? " a su nueva posición, ampliada" : " a su nueva posición") : string.Empty;
+
+            // Lo que caiga dentro del primer MiB del destino viaja con la tabla, que se escribe la última.
+            var skip = Math.Max(0, head - placement.TargetOffset);
+            if (skip >= partition.SizeBytes)
+            {
+                continue;
+            }
+
+            steps.Add(step with
+            {
+                Offset = placement.TargetOffset + skip,
+                SourceOffset = partition.OffsetBytes + skip,
+                Length = partition.SizeBytes - skip,
+                EstimatedBytes = Math.Min(step.ExpectedBytes, partition.SizeBytes - skip),
+                Description = step.Description + change,
+            });
+        }
+
+        if (table.Gpt is { } gpt)
+        {
+            var length = (gpt.EntriesSectors + 1L) * gpt.SectorSize;
+            steps.Add(new CloneStep(CloneStepKind.WriteBackupGpt, targetBytes - length, length, "Escribir la GPT de respaldo al final del destino"));
+        }
+
+        steps.Add(new CloneStep(CloneStepKind.WritePartitionTable, 0, head, "Escribir la tabla de particiones nueva"));
         return steps;
     }
 
