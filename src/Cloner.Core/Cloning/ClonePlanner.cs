@@ -9,16 +9,23 @@ internal sealed record CloneEnvironment
 {
     /// <summary>Disco desde el que se ejecuta la aplicación, si se pudo averiguar.</summary>
     public int? HostDiskNumber { get; init; }
+
+    /// <summary>Se pueden crear instantáneas VSS (Windows en marcha; no en WinPE).</summary>
+    public bool SnapshotsAvailable { get; init; }
 }
 
 /// <summary>
-/// Decide si un clonado sector a sector es posible y produce su plan. Aquí está toda la lógica
-/// que decide qué disco se escribe (RS-02, RS-06) y en qué orden (RS-05). No toca discos.
+/// Decide si un clonado es posible y produce su plan. Aquí está toda la lógica que decide qué
+/// disco se escribe (RS-02, RS-06), en qué orden (RS-05), de dónde se lee cada partición
+/// (disco o instantánea) y qué se copia (todo o solo los bloques en uso). No toca discos.
 /// </summary>
 internal static class ClonePlanner
 {
     /// <summary>Al empezar se borra también el final del destino, donde puede haber una GPT de respaldo antigua.</summary>
     public const int TailClearBytes = 1024 * 1024;
+
+    /// <summary>Margen sobre el espacio usado al estimar lo que se copia de un volumen NTFS.</summary>
+    private const long UsedBlocksMargin = 64L * 1024 * 1024;
 
     private const long MbrLimitSectors = uint.MaxValue;
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("es-ES");
@@ -38,16 +45,16 @@ internal static class ClonePlanner
 
         var problems = new List<string>();
         CheckTarget(source, target, environment, options, problems);
-        CheckSource(source, sourceTable, problems);
+        CheckSource(source, sourceTable, environment, problems);
         CheckCompatibility(source, target, problems);
 
-        var warnings = BuildWarnings(source, target);
         if (problems.Count > 0 || sourceTable is null)
         {
-            return new ClonePlanResult { Problems = problems, Warnings = warnings };
+            return new ClonePlanResult { Problems = problems, Warnings = BuildWarnings(source, target, []) };
         }
 
-        var steps = BuildSteps(source.SizeBytes, target.SizeBytes, sourceTable, problems);
+        var steps = BuildSteps(source, target.SizeBytes, sourceTable, environment, options, problems);
+        var warnings = BuildWarnings(source, target, steps);
         if (problems.Count > 0)
         {
             return new ClonePlanResult { Problems = problems, Warnings = warnings };
@@ -58,6 +65,8 @@ internal static class ClonePlanner
             Source = DiskIdentity.From(source),
             Target = DiskIdentity.From(target),
             Options = options,
+            SourceIsSystemDisk = source.IsSystemDisk,
+            SourceIsReadOnly = source.IsReadOnly,
             SourcePartitions = source.Partitions,
             TargetPartitions = target.Partitions,
             Steps = steps,
@@ -68,6 +77,11 @@ internal static class ClonePlanner
 
         return new ClonePlanResult { Plan = plan, Warnings = warnings };
     }
+
+    /// <summary>Volúmenes de los que VSS puede hacer instantáneas.</summary>
+    internal static bool SupportsSnapshots(string? fileSystem) =>
+        string.Equals(fileSystem, "NTFS", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fileSystem, "ReFS", StringComparison.OrdinalIgnoreCase);
 
     // RS-02: el destino no puede ser el origen, el disco del sistema ni el de la aplicación.
     private static void CheckTarget(DiskInfo source, DiskInfo target, CloneEnvironment environment, CloneOptions options, List<string> problems)
@@ -104,11 +118,20 @@ internal static class ClonePlanner
         }
     }
 
-    private static void CheckSource(DiskInfo source, PartitionTableInfo? table, List<string> problems)
+    private static void CheckSource(DiskInfo source, PartitionTableInfo? table, CloneEnvironment environment, List<string> problems)
     {
+        // RF-10: el disco del sistema solo se puede copiar en caliente a partir de instantáneas.
         if (source.IsSystemDisk)
         {
-            problems.Add($"El disco {source.Number} es el disco del sistema en uso. Clonarlo con Windows en marcha todavía no está disponible.");
+            var windows = source.Partitions.FirstOrDefault(p => p.ContainsWindows);
+            if (!environment.SnapshotsAvailable)
+            {
+                problems.Add($"El disco {source.Number} es el disco del sistema en uso y aquí no se pueden crear instantáneas (VSS) para copiarlo en caliente.");
+            }
+            else if (windows?.Volume is not { } volume || !SupportsSnapshots(volume.FileSystem))
+            {
+                problems.Add($"No se puede hacer una instantánea del volumen de Windows del disco {source.Number}.");
+            }
         }
 
         if (source.Partitions.Any(p => p.Kind == PartitionKind.Dynamic))
@@ -147,7 +170,11 @@ internal static class ClonePlanner
 
         if (target.SizeBytes < source.SizeBytes)
         {
-            problems.Add($"El destino ({Size(target.SizeBytes)}) es más pequeño que el origen ({Size(source.SizeBytes)}).");
+            var targetSize = Size(target.SizeBytes);
+            var sourceSize = Size(source.SizeBytes);
+            problems.Add(targetSize == sourceSize
+                ? $"El destino es {Bytes(source.SizeBytes - target.SizeBytes)} bytes más pequeño que el origen ({Bytes(target.SizeBytes)} frente a {Bytes(source.SizeBytes)} bytes)."
+                : $"El destino ({targetSize}) es más pequeño que el origen ({sourceSize}).");
         }
 
         if (source.SizeBytes < 2L * (PartitionTable.HeadBytes + TailClearBytes))
@@ -161,16 +188,32 @@ internal static class ClonePlanner
         }
     }
 
-    private static List<string> BuildWarnings(DiskInfo source, DiskInfo target)
+    private static List<string> BuildWarnings(DiskInfo source, DiskInfo target, IReadOnlyList<CloneStep> steps)
     {
         var warnings = new List<string>();
+
+        if (source.IsSystemDisk)
+        {
+            warnings.Add("Es el disco del sistema: el clon arrancará igual que el original. Para arrancar desde él, retira o desconecta el disco original.");
+        }
+
+        var snapshotNames = steps.Where(s => s.FromSnapshot && s.Partition is not null).Select(s => VolumeName(s.Partition!)).Distinct().ToList();
+        if (snapshotNames.Count > 0)
+        {
+            warnings.Add($"Se copiará a partir de una instantánea de {string.Join(", ", snapshotNames)}: lo que cambie en esos volúmenes después de empezar no estará en el clon.");
+        }
 
         if (DiskHealth.Assess(source) != HealthIssues.None)
         {
             warnings.Add("El origen presenta problemas de salud: la copia puede detenerse si encuentra sectores ilegibles.");
         }
 
-        if (source.Partitions.Any(p => p.Encryption is EncryptionState.On or EncryptionState.Suspended))
+        var encrypted = source.Partitions.Where(p => p.Encryption is EncryptionState.On or EncryptionState.Suspended).ToList();
+        if (encrypted.Any(p => steps.Any(s => s.FromSnapshot && s.Partition == p)))
+        {
+            warnings.Add("Hay volúmenes cifrados con BitLocker que se copian desde una instantánea: en el clon quedarán sin cifrar. Vuelve a activar el cifrado después.");
+        }
+        else if (encrypted.Count > 0)
         {
             warnings.Add("Hay particiones cifradas con BitLocker: se copian cifradas y el clon se abrirá con la misma contraseña o clave de recuperación.");
         }
@@ -202,8 +245,15 @@ internal static class ClonePlanner
     /// copian los datos y la tabla de particiones va al final. Si la copia se interrumpe, el
     /// destino queda sin tabla y Windows no lo toma por un disco válido.
     /// </summary>
-    private static List<CloneStep> BuildSteps(long sourceBytes, long targetBytes, PartitionTableInfo table, List<string> problems)
+    private static List<CloneStep> BuildSteps(
+        DiskInfo source,
+        long targetBytes,
+        PartitionTableInfo table,
+        CloneEnvironment environment,
+        CloneOptions options,
+        List<string> problems)
     {
+        var sourceBytes = source.SizeBytes;
         long head = PartitionTable.HeadBytes;
         var steps = new List<CloneStep>
         {
@@ -238,8 +288,8 @@ internal static class ClonePlanner
 
         if (backup is { } range)
         {
-            AddCopy(steps, head, range.Start);
-            AddCopy(steps, range.End, sourceBytes);
+            AddBody(steps, source, head, range.Start, environment, options);
+            AddBody(steps, source, range.End, sourceBytes, environment, options);
             if (adjustGpt)
             {
                 var length = range.End - range.Start;
@@ -252,7 +302,7 @@ internal static class ClonePlanner
         }
         else
         {
-            AddCopy(steps, head, sourceBytes);
+            AddBody(steps, source, head, sourceBytes, environment, options);
         }
 
         steps.Add(new CloneStep(
@@ -263,13 +313,91 @@ internal static class ClonePlanner
         return steps;
     }
 
-    private static void AddCopy(List<CloneStep> steps, long start, long end)
+    /// <summary>Pasos para el tramo [start, end) del origen: una copia por partición y los huecos entre ellas.</summary>
+    private static void AddBody(List<CloneStep> steps, DiskInfo source, long start, long end, CloneEnvironment environment, CloneOptions options)
     {
-        if (end > start)
+        if (end <= start)
         {
-            steps.Add(new CloneStep(CloneStepKind.Copy, start, end - start, "Copiar los datos"));
+            return;
+        }
+
+        var extended = source.Partitions.FirstOrDefault(p => p.Kind == PartitionKind.Extended);
+        var cursor = start;
+        foreach (var partition in source.Partitions
+            .Where(p => p.Kind != PartitionKind.Extended && p.OffsetBytes + p.SizeBytes > start && p.OffsetBytes < end)
+            .OrderBy(p => p.OffsetBytes))
+        {
+            var partitionStart = Math.Max(partition.OffsetBytes, cursor);
+            var partitionEnd = Math.Min(partition.OffsetBytes + partition.SizeBytes, end);
+            AddGap(steps, cursor, partitionStart, extended, options);
+            if (partitionEnd > partitionStart)
+            {
+                steps.Add(PartitionStep(source, partition, partitionStart, partitionEnd, environment, options));
+            }
+
+            cursor = Math.Max(cursor, partitionEnd);
+        }
+
+        AddGap(steps, cursor, end, extended, options);
+    }
+
+    private static CloneStep PartitionStep(DiskInfo source, PartitionInfo partition, long start, long end, CloneEnvironment environment, CloneOptions options)
+    {
+        var volume = partition.Volume;
+        var fromSnapshot = environment.SnapshotsAvailable && !source.IsReadOnly && volume is not null && SupportsSnapshots(volume.FileSystem);
+        var usedBlocksOnly = options.Mode == CloneMode.UsedBlocks
+            && string.Equals(volume?.FileSystem, "NTFS", StringComparison.OrdinalIgnoreCase)
+            && (fromSnapshot || source.IsReadOnly);
+
+        var length = end - start;
+        var estimate = usedBlocksOnly ? Math.Min(length, volume!.UsedBytes + UsedBlocksMargin) : length;
+
+        var description = $"Copiar la partición {partition.Number} ({VolumeName(partition)})"
+            + (fromSnapshot ? " desde una instantánea" : string.Empty)
+            + (usedBlocksOnly ? ", solo los bloques en uso" : string.Empty);
+
+        return new CloneStep(CloneStepKind.CopyPartition, start, length, description)
+        {
+            Partition = partition,
+            FromSnapshot = fromSnapshot,
+            UsedBlocksOnly = usedBlocksOnly,
+            EstimatedBytes = estimate,
+        };
+    }
+
+    /// <summary>
+    /// Espacio sin particionar: sector a sector se copia; en la copia inteligente se omite,
+    /// salvo dentro de una partición extendida, donde están las tablas de las lógicas (EBR).
+    /// </summary>
+    private static void AddGap(List<CloneStep> steps, long start, long end, PartitionInfo? extended, CloneOptions options)
+    {
+        if (end <= start)
+        {
+            return;
+        }
+
+        if (options.Mode == CloneMode.SectorBySector)
+        {
+            steps.Add(new CloneStep(CloneStepKind.Copy, start, end - start, "Copiar el espacio sin particionar"));
+            return;
+        }
+
+        if (extended is not null)
+        {
+            var from = Math.Max(start, extended.OffsetBytes);
+            var to = Math.Min(end, extended.OffsetBytes + extended.SizeBytes);
+            if (to > from)
+            {
+                steps.Add(new CloneStep(CloneStepKind.Copy, from, to - from, "Copiar las tablas de las particiones lógicas"));
+            }
         }
     }
 
+    private static string VolumeName(PartitionInfo partition) => partition.DriveLetter is { } letter
+        ? $"{letter}:"
+        : partition.Volume?.Label ?? InventoryText.Kind(partition.Kind);
+
     private static string Size(long bytes) => ByteSize.Format(bytes, Culture);
+
+    private static string Bytes(long bytes) => bytes.ToString("N0", Culture);
 }

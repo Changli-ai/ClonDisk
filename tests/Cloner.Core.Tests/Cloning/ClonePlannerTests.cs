@@ -9,6 +9,8 @@ public class ClonePlannerTests
 {
     private static readonly Guid SourceGuid = new("11111111-2222-3333-4444-555555555555");
     private static readonly CloneEnvironment NoHost = new();
+    private static readonly CloneEnvironment WithSnapshots = new() { SnapshotsAvailable = true };
+    private static readonly CloneOptions SectorBySector = new() { Mode = CloneMode.SectorBySector };
 
     private static (DiskInfo Disk, PartitionTableInfo Table) GptSource(long size = 8 * MiB, int number = 1)
     {
@@ -28,7 +30,7 @@ public class ClonePlannerTests
     {
         var (source, table) = GptSource();
 
-        var result = Plan(source, Target(), table);
+        var result = Plan(source, Target(), table, options: SectorBySector);
 
         Assert.Empty(result.Problems);
         var plan = Assert.IsType<ClonePlan>(result.Plan);
@@ -81,13 +83,14 @@ public class ClonePlannerTests
         var image = Mbr(8 * MiB, 0xCAFE0001, (MiB, 6 * MiB));
         var source = TestDisks.Info(1, image);
 
-        var plan = Plan(source, Target(12 * MiB), TestDisks.Table(image)).Plan!;
+        var plan = Plan(source, Target(12 * MiB), TestDisks.Table(image), options: SectorBySector).Plan!;
 
         Assert.False(plan.AdjustsGpt);
         Assert.DoesNotContain(plan.Steps, s => s.Kind == CloneStepKind.WriteBackupGpt);
-        var copy = Assert.Single(plan.Steps, s => s.Kind == CloneStepKind.Copy);
-        Assert.Equal((long)PartitionTable.HeadBytes, copy.Offset);
-        Assert.Equal(8 * MiB, copy.End);
+        var copies = plan.Steps.Where(s => s.Kind is CloneStepKind.Copy or CloneStepKind.CopyPartition).OrderBy(s => s.Offset).ToList();
+        Assert.Equal((long)PartitionTable.HeadBytes, copies[0].Offset);
+        Assert.Equal(8 * MiB, copies[^1].End);
+        Assert.Equal(8 * MiB - PartitionTable.HeadBytes, copies.Sum(s => s.Length));
     }
 
     [Fact]
@@ -162,6 +165,17 @@ public class ClonePlannerTests
 
         Assert.Null(result.Plan);
         Assert.Contains(result.Problems, p => p.Contains("más pequeño", StringComparison.Ordinal) && p.Contains("12 MB", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SlightlySmallerTargetIsExplainedInBytes()
+    {
+        var (source, table) = GptSource();
+
+        var result = Plan(source, Target() with { SizeBytes = (8 * MiB) - 512 }, table);
+
+        Assert.Null(result.Plan);
+        Assert.Contains(result.Problems, p => p.Contains("es 512 bytes más pequeño", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -73,6 +73,99 @@ internal sealed class DiskDevice : IBlockDevice
     }
 
     /// <summary>
+    /// Abre en solo lectura un volumen o el dispositivo de una instantánea
+    /// (<c>\\?\Volume{GUID}</c>, <c>\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopyN</c>).
+    /// </summary>
+    public static DiskDevice OpenVolume(string devicePath, int sectorSize)
+    {
+        ArgumentNullException.ThrowIfNull(devicePath);
+        var name = $"el volumen {devicePath}";
+        var handle = OpenHandle(devicePath.TrimEnd('\\'), GenericRead, unbuffered: true, name);
+        try
+        {
+            Span<byte> length = stackalloc byte[8];
+            Ioctl(handle, PInvoke.IOCTL_DISK_GET_LENGTH_INFO, [], length);
+            return new DiskDevice(handle, name, isDisk: false, BitConverter.ToInt64(length), sectorSize, canWrite: false);
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Bytes que se pueden leer realmente. El dispositivo de una instantánea declara la longitud de
+    /// la partición, pero no deja leer el final que queda fuera de los clústeres de NTFS; se
+    /// averigua con una búsqueda binaria de lecturas de un sector.
+    /// </summary>
+    public long ReadableLength()
+    {
+        var sectors = Length / SectorSize;
+        using var buffer = new AlignedBuffer(Math.Max(SectorSize, AlignedBuffer.Alignment));
+        var sector = buffer.Span[..SectorSize];
+        if (sectors == 0 || CanRead(sectors - 1, sector))
+        {
+            return sectors * SectorSize;
+        }
+
+        // Invariante: el sector «readable» se lee y el «unreadable» no.
+        long readable = 0;
+        var unreadable = sectors - 1;
+        while (unreadable - readable > 1)
+        {
+            var middle = readable + ((unreadable - readable) / 2);
+            if (CanRead(middle, sector))
+            {
+                readable = middle;
+            }
+            else
+            {
+                unreadable = middle;
+            }
+        }
+
+        return (readable + 1) * SectorSize;
+    }
+
+    private bool CanRead(long sector, Span<byte> buffer)
+    {
+        try
+        {
+            return RandomAccess.Read(_handle, buffer, sector * SectorSize) == buffer.Length;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Tramos en uso de un volumen NTFS según su mapa de bits, o nulo si el volumen no es NTFS.
+    /// Solo tiene sentido en un volumen abierto con <see cref="OpenVolume"/>.
+    /// </summary>
+    /// <param name="readableLength">Final legible del volumen (<see cref="ReadableLength"/>).</param>
+    public List<ByteRange>? ReadNtfsUsage(long readableLength)
+    {
+        Span<byte> data = stackalloc byte[128];
+        try
+        {
+            Ioctl(_handle, PInvoke.FSCTL_GET_NTFS_VOLUME_DATA, [], data);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+
+        var (totalClusters, bytesPerCluster) = NtfsUsage.ParseVolumeData(data);
+        var bitmap = new byte[NtfsUsage.BitmapHeaderSize + ((totalClusters + 7) / 8)];
+        Span<byte> startingLcn = stackalloc byte[8];
+        startingLcn.Clear();
+        Ioctl(_handle, PInvoke.FSCTL_GET_VOLUME_BITMAP, startingLcn, bitmap);
+        return NtfsUsage.UsedRanges(bitmap, totalClusters, bytesPerCluster, readableLength);
+    }
+
+    /// <summary>
     /// Consulta los datos del disco sin pedir acceso de lectura ni de escritura, así que no
     /// requiere administrador.
     /// </summary>

@@ -233,6 +233,25 @@ internal sealed class FakeDiskAccess : IDiskAccess
     /// <summary>Si no es nulo, bloquear volúmenes del destino falla con este mensaje.</summary>
     public string? LockFailure { get; set; }
 
+    /// <summary>Nombres de volúmenes del origen que no se dejan bloquear (están en uso).</summary>
+    public HashSet<string> BusySourceVolumes { get; } = [];
+
+    /// <summary>Volúmenes conocidos: ruta → disco, posición de la partición y bloques en uso (nulo = no NTFS).</summary>
+    public Dictionary<string, (int Disk, long Offset, long Size, IReadOnlyList<ByteRange>? Used)> Volumes { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Volúmenes de cada conjunto de instantáneas creado, y si se completó.</summary>
+    public List<(IReadOnlyList<string> Volumes, bool Completed, bool Disposed)> Snapshots { get; } = [];
+
+    /// <summary>Se invoca justo después de crear las instantáneas: simula cambios en el origen en uso.</summary>
+    public Action? AfterSnapshot { get; set; }
+
+    /// <summary>Si no es nulo, las instantáneas solo dejan leer hasta aquí, como las reales de NTFS.</summary>
+    public long? SnapshotReadableLength { get; set; }
+
+    /// <summary>Si no es nulo, crear instantáneas falla con este mensaje.</summary>
+    public string? SnapshotFailure { get; set; }
+
     public IBlockDevice Open(DiskIdentity disk, bool writable)
     {
         Opened.Add((disk.Number, writable));
@@ -246,8 +265,64 @@ internal sealed class FakeDiskAccess : IDiskAccess
             throw new CloneException(LockFailure);
         }
 
+        if (!dismount && volumes.FirstOrDefault(v => BusySourceVolumes.Contains(v.Name)) is { } busy)
+        {
+            throw new CloneException($"El volumen {busy.Name} está en uso.");
+        }
+
         Locks.Add((volumes, dismount));
         return new Releaser();
+    }
+
+    public ISnapshotSet CreateSnapshots(IReadOnlyList<string> volumePaths, int sectorSize)
+    {
+        if (SnapshotFailure is not null)
+        {
+            throw new CloneException(SnapshotFailure);
+        }
+
+        // Cada instantánea congela una copia de la partición en el momento de crearla.
+        var frozen = volumePaths.ToDictionary(
+            path => path,
+            path => (IVolumeSource)Freeze(path),
+            StringComparer.OrdinalIgnoreCase);
+        Snapshots.Add((volumePaths, false, false));
+        AfterSnapshot?.Invoke();
+        return new FakeSnapshotSet(this, Snapshots.Count - 1, frozen);
+    }
+
+    public IVolumeSource OpenVolume(string volumePath, int sectorSize)
+    {
+        var (disk, offset, size, used) = Volumes[volumePath];
+        var view = new MemoryDisk(Disks[disk].Data.AsSpan((int)offset, (int)size).ToArray());
+        return new FakeVolume(view.Open(writable: false), used);
+    }
+
+    private FakeVolume Freeze(string volumePath)
+    {
+        var (disk, offset, size, used) = Volumes[volumePath];
+        var copy = Disks[disk].Data.AsSpan((int)offset, (int)size).ToArray();
+        return new FakeVolume(new MemoryDisk(copy).Open(writable: false), used, SnapshotReadableLength);
+    }
+
+    private sealed class FakeVolume(IBlockDevice device, IReadOnlyList<ByteRange>? used, long? readable = null) : IVolumeSource
+    {
+        public IBlockDevice Device => device;
+
+        public long Length => readable ?? device.Length;
+
+        public IReadOnlyList<ByteRange>? ReadUsedRanges() => used;
+
+        public void Dispose() => device.Dispose();
+    }
+
+    private sealed class FakeSnapshotSet(FakeDiskAccess owner, int index, Dictionary<string, IVolumeSource> volumes) : ISnapshotSet
+    {
+        public IVolumeSource Open(string volumePath) => volumes[volumePath];
+
+        public void Complete() => owner.Snapshots[index] = owner.Snapshots[index] with { Completed = true };
+
+        public void Dispose() => owner.Snapshots[index] = owner.Snapshots[index] with { Disposed = true };
     }
 
     private sealed class Releaser : IDisposable

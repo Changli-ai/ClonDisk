@@ -25,10 +25,17 @@ public partial class MainWindow : Window
             wizard.ViewModel = createViewModel(wizard);
             wizard.ShowDialog();
         };
-        Loaded += async (_, _) => await viewModel.RefreshCommand.ExecuteAsync(null);
+        // Si la pantalla de carga ya leyó los discos, no se vuelven a leer.
+        Loaded += async (_, _) =>
+        {
+            if (!viewModel.HasLoaded)
+            {
+                await viewModel.RefreshCommand.ExecuteAsync(null);
+            }
+        };
     }
 
-    private static MainViewModel CreateViewModel()
+    internal static MainViewModel CreateViewModel()
     {
         var inventory = new DiskInventory();
         return new MainViewModel(inventory, new CloneService(inventory));

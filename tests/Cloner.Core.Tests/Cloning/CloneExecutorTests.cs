@@ -1,4 +1,5 @@
 using Cloner.Core.Cloning;
+using Cloner.Core.Devices;
 using Cloner.Core.Inventory;
 using Cloner.Core.PartitionTables;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,7 +15,14 @@ public class CloneExecutorTests
     /// <summary>Origen GPT de 8 MiB y destino GPT con otra tabla, ambos en memoria.</summary>
     private sealed class Setup
     {
-        public Setup(long targetSize = 8 * MiB, bool mbrSource = false, bool verify = true)
+        public Setup(
+            long targetSize = 8 * MiB,
+            bool mbrSource = false,
+            bool verify = true,
+            CloneMode mode = CloneMode.SectorBySector,
+            bool snapshots = false,
+            IReadOnlyList<ByteRange>? usedRanges = null,
+            bool efi = false)
         {
             SourceImage = mbrSource
                 ? Mbr(8 * MiB, 0x12345678, (MiB, 6 * MiB))
@@ -23,15 +31,25 @@ public class CloneExecutorTests
             TargetImage = Gpt(targetSize, TargetGuid, (MiB, 2 * MiB));
             OriginalTarget = (byte[])TargetImage.Clone();
 
-            var source = TestDisks.Info(1, SourceImage, [TestDisks.Partition(1, MiB, 6 * MiB, 'E', "Datos")]);
+            var partition = TestDisks.Partition(1, MiB, 6 * MiB, 'E', "Datos");
+            if (efi)
+            {
+                partition = partition with { Kind = PartitionKind.EfiSystem, Volume = partition.Volume! with { FileSystem = "FAT32" } };
+            }
+
+            var source = TestDisks.Info(1, SourceImage, [partition]);
             var target = TestDisks.Info(2, TargetImage, [TestDisks.Partition(1, MiB, 2 * MiB, 'F')]);
-            var result = ClonePlanner.Create(source, target, TestDisks.Table(SourceImage), new CloneEnvironment(), new CloneOptions { Verify = verify });
+            var environment = new CloneEnvironment { SnapshotsAvailable = snapshots };
+            var options = new CloneOptions { Verify = verify, Mode = mode };
+            var result = ClonePlanner.Create(source, target, TestDisks.Table(SourceImage), environment, options);
             Plan = result.Plan ?? throw new InvalidOperationException(string.Join(" ", result.Problems));
 
             Source = new MemoryDisk(SourceImage);
             Target = new MemoryDisk(TargetImage);
             Access.Disks[1] = Source;
             Access.Disks[2] = Target;
+            SourceVolume = source.Partitions[0].Volume!.Path;
+            Access.Volumes[SourceVolume] = (1, MiB, 6 * MiB, usedRanges);
         }
 
         public byte[] SourceImage { get; }
@@ -39,6 +57,7 @@ public class CloneExecutorTests
         public byte[] TargetImage { get; }
         public byte[] OriginalTarget { get; }
         public ClonePlan Plan { get; }
+        public string SourceVolume { get; }
         public MemoryDisk Source { get; }
         public MemoryDisk Target { get; }
         public FakeDiskAccess Access { get; } = new();

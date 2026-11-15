@@ -57,7 +57,11 @@ public sealed class CloneService : ICloneService
             return ClonePlanResult.Blocked($"No existe el disco {(source is null ? sourceNumber : targetNumber)}.");
         }
 
-        var environment = new CloneEnvironment { HostDiskNumber = HostDisk.FindDiskNumber(AppContext.BaseDirectory, disks) };
+        var environment = new CloneEnvironment
+        {
+            HostDiskNumber = HostDisk.FindDiskNumber(AppContext.BaseDirectory, disks),
+            SnapshotsAvailable = !Elevation.IsWinPE(),
+        };
         return ClonePlanner.Create(source, target, TryReadTable(source), environment, options);
     }
 

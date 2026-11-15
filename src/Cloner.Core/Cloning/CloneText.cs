@@ -30,6 +30,24 @@ public static class CloneText
 
     public static string Percent(double fraction) => fraction.ToString("P1", Culture);
 
+    public static string Mode(CloneMode mode) => mode switch
+    {
+        CloneMode.UsedBlocks => "copia inteligente (solo los bloques en uso)",
+        CloneMode.SectorBySector => "sector a sector (copia íntegra)",
+        _ => mode.ToString(),
+    };
+
+    /// <summary>«Se copiarán unos 350 GB, solo los bloques en uso» o «Se copiarán 954 GB, sector a sector».</summary>
+    public static string CopyAmount(ClonePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var size = ByteSize.Format(plan.BytesToCopy, Culture);
+        var estimated = plan.Steps.Any(s => s.UsedBlocksOnly);
+        return plan.Mode == CloneMode.UsedBlocks
+            ? $"Se copiarán {(estimated ? "unos " : string.Empty)}{size}, solo los bloques en uso"
+            : $"Se copiarán {size}, sector a sector";
+    }
+
     /// <summary>«312 MB/s», o un guion mientras no hay medida.</summary>
     public static string Speed(double bytesPerSecond) =>
         bytesPerSecond > 0 ? $"{ByteSize.Format((long)bytesPerSecond, Culture)}/s" : "—";

@@ -6,8 +6,8 @@ namespace Cloner.Core.Logging;
 /// <summary>Mensajes del registro de clonado (RF-33), generados en compilación.</summary>
 internal static partial class CloneLog
 {
-    [LoggerMessage(Level = LogLevel.Information, Message = "Clonado sector a sector. Verificación: {Verify}. Ajuste de la GPT: {AdjustGpt}.")]
-    public static partial void PlanStarted(ILogger logger, string verify, string adjustGpt);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Clonado: {Mode}. Verificación: {Verify}. Ajuste de la GPT: {AdjustGpt}.")]
+    public static partial void PlanStarted(ILogger logger, string mode, string verify, string adjustGpt);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "{Role}: {Disk}; serie {Serial}; identificador {Identifier}; ubicación {Location}.")]
     public static partial void PlanDisk(ILogger logger, string role, string disk, string? serial, string? identifier, string? location);
@@ -20,6 +20,15 @@ internal static partial class CloneLog
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Volúmenes bloqueados. Empieza la copia.")]
     public static partial void VolumesLocked(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Instantáneas creadas: {Volumes}.")]
+    public static partial void SnapshotsCreated(ILogger logger, string volumes);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No se pudo bloquear {Volume}; se copia igualmente porque Windows no lo modifica en uso normal. {Reason}")]
+    public static partial void LockSkipped(ILogger logger, string volume, string reason);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Plan detallado de «{Step}»: {Bytes} bytes en {Ranges} tramos.")]
+    public static partial void StepExpanded(ILogger logger, string step, long bytes, int ranges);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Paso: {Step} (bytes {Start}–{End}).")]
     public static partial void StepStarted(ILogger logger, string step, long start, long end);

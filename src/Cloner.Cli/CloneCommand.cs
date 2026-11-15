@@ -23,7 +23,7 @@ internal static class CloneCommand
         if (!TryParse(args, out var source, out var target, out var options, out var error))
         {
             Console.Error.WriteLine(error);
-            Console.Error.WriteLine("Uso: clondisk-cli " + (execute ? "clone" : "plan") + " <disco origen> <disco destino> [--no-verify] [--virtual-only]");
+            Console.Error.WriteLine("Uso: clondisk-cli " + (execute ? "clone" : "plan") + " <disco origen> <disco destino> [--sector] [--no-verify] [--virtual-only]");
             return Usage;
         }
 
@@ -62,7 +62,7 @@ internal static class CloneCommand
 
     public static void WritePlan(TextWriter output, ClonePlan plan)
     {
-        output.WriteLine("Plan de clonado sector a sector");
+        output.WriteLine($"Plan de clonado: {CloneText.Mode(plan.Mode)}");
         output.WriteLine();
         output.WriteLine($"  Origen:  {plan.Source.Describe(Culture)}");
         output.WriteLine($"  Destino: {plan.Target.Describe(Culture)}");
@@ -80,7 +80,7 @@ internal static class CloneCommand
         }
 
         output.WriteLine();
-        output.WriteLine($"  Se copiarán {ByteSize.Format(plan.BytesToCopy, Culture)}. Verificación al terminar: {(plan.Options.Verify ? "sí" : "no")}.");
+        output.WriteLine($"  {CloneText.CopyAmount(plan)}. Verificación al terminar: {(plan.Options.Verify ? "sí" : "no")}.");
 
         if (plan.Warnings.Count > 0)
         {
@@ -159,6 +159,9 @@ internal static class CloneCommand
             {
                 case "--no-verify":
                     options = options with { Verify = false };
+                    break;
+                case "--sector":
+                    options = options with { Mode = CloneMode.SectorBySector };
                     break;
                 case "--virtual-only":
                     options = options with { VirtualTargetOnly = true };

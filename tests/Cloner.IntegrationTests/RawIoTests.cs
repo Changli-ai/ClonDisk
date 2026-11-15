@@ -93,7 +93,7 @@ public sealed class RawIoTests : IDisposable
         var source = InfoFor(1, sourcePath);
         var target = InfoFor(2, targetPath);
         var table = PartitionTable.Read(File.ReadAllBytes(sourcePath).AsSpan(0, PartitionTable.HeadBytes), Sector);
-        var plan = ClonePlanner.Create(source, target, table, new CloneEnvironment(), new CloneOptions()).Plan!;
+        var plan = ClonePlanner.Create(source, target, table, new CloneEnvironment(), new CloneOptions { Mode = CloneMode.SectorBySector }).Plan!;
 
         var access = new FileDiskAccess(new() { [1] = sourcePath, [2] = targetPath });
         var result = new CloneExecutor(access, NullLogger.Instance).Execute(plan, null, CancellationToken.None);
@@ -188,6 +188,12 @@ public sealed class RawIoTests : IDisposable
         public IBlockDevice Open(DiskIdentity disk, bool writable) => DiskDevice.OpenFile(paths[disk.Number], Sector, writable);
 
         public IDisposable LockVolumes(IReadOnlyList<VolumeRef> volumes, bool dismount) => new Nothing();
+
+        public ISnapshotSet CreateSnapshots(IReadOnlyList<string> volumePaths, int sectorSize) =>
+            throw new NotSupportedException("Las imágenes de archivo no tienen volúmenes.");
+
+        public IVolumeSource OpenVolume(string volumePath, int sectorSize) =>
+            throw new NotSupportedException("Las imágenes de archivo no tienen volúmenes.");
 
         private sealed class Nothing : IDisposable
         {

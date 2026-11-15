@@ -14,4 +14,14 @@ public static class Elevation
         using var identity = WindowsIdentity.GetCurrent();
         return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }
+
+    /// <summary>
+    /// Indica si se ejecuta dentro de WinPE, donde no hay servicio de instantáneas (VSS). WinPE
+    /// se reconoce por la clave <c>HKLM\SYSTEM\CurrentControlSet\Control\MiniNT</c>.
+    /// </summary>
+    public static bool IsWinPE()
+    {
+        using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\MiniNT");
+        return key is not null;
+    }
 }

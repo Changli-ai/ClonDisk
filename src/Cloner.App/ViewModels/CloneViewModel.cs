@@ -76,6 +76,7 @@ public sealed partial class CloneViewModel : ObservableObject
             ?? Disks.FirstOrDefault(d => !disks.First(x => x.Number == d.Number).IsSystemDisk);
         Target = Disks.FirstOrDefault(d => d != Source && !disks.First(x => x.Number == d.Number).IsSystemDisk);
         Verify = true;
+        UseSmartCopy = true;
         Stage = CloneStage.Select;
     }
 
@@ -91,6 +92,17 @@ public sealed partial class CloneViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool Verify { get; set; }
+
+    /// <summary>Copia inteligente (RF-12); si es falso, sector a sector.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UseSectorCopy))]
+    public partial bool UseSmartCopy { get; set; }
+
+    public bool UseSectorCopy
+    {
+        get => !UseSmartCopy;
+        set => UseSmartCopy = !value;
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSelecting), nameof(IsReviewing), nameof(IsRunning), nameof(IsFinished))]
@@ -182,7 +194,7 @@ public sealed partial class CloneViewModel : ObservableObject
         {
             var source = Source!.Number;
             var target = Target!.Number;
-            var options = new CloneOptions { Verify = Verify };
+            var options = new CloneOptions { Verify = Verify, Mode = UseSmartCopy ? CloneMode.UsedBlocks : CloneMode.SectorBySector };
             var result = await Task.Run(() => _service.CreatePlan(source, target, options));
             if (result.Plan is not { } plan)
             {
@@ -287,7 +299,7 @@ public sealed partial class CloneViewModel : ObservableObject
         ErasedItems = plan.TargetPartitions.Count > 0
             ? plan.TargetPartitions.Select(CloneText.Partition).ToList()
             : ["El disco no tiene particiones, pero todo lo que contenga se sobrescribirá."];
-        CopySummary = $"Se copiarán {ByteSize.Format(plan.BytesToCopy, Culture)}, sector a sector. "
+        CopySummary = $"{CloneText.CopyAmount(plan)}. "
             + (plan.Options.Verify ? "Al terminar se comprobará que el destino coincide." : "No se verificará al terminar.");
         Warnings = plan.Warnings;
         ConfirmText = $"Entiendo que se borrará todo el contenido del disco {plan.Target.Number}.";

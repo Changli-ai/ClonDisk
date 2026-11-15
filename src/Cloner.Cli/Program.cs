@@ -51,8 +51,11 @@ void WriteHelp(TextWriter output)
     output.WriteLine();
     output.WriteLine("  list                        Muestra los discos del equipo y sus particiones (solo lectura).");
     output.WriteLine("  plan <origen> <destino>     Muestra qué haría un clonado, sin escribir nada.");
-    output.WriteLine("  clone <origen> <destino>    Clona el disco de origen sobre el de destino, sector a sector.");
+    output.WriteLine("  clone <origen> <destino>    Clona el disco de origen sobre el de destino. Admite el disco");
+    output.WriteLine("                              del sistema en uso: se copia desde una instantánea.");
     output.WriteLine("                              Borra todo el destino; pide confirmación antes de escribir.");
+    output.WriteLine("      --sector                Copia sector a sector, también el espacio libre.");
+    output.WriteLine("                              Sin esta opción solo se copian los bloques en uso.");
     output.WriteLine("      --no-verify             No relee el destino para compararlo al terminar.");
     output.WriteLine("      --virtual-only          Solo admite destinos virtuales (VHD/VHDX), para pruebas.");
     output.WriteLine("  version                     Muestra la versión.");

@@ -77,7 +77,7 @@
 
         <StackPanel Margin="0,0,0,16">
             <TextBlock Text="Clonar un disco" FontSize="22" FontWeight="SemiBold" />
-            <TextBlock Text="Copia íntegra, sector a sector, de un disco de datos a otro de igual o mayor capacidad."
+            <TextBlock Text="Copia un disco completo a otro de igual o mayor capacidad, también el del sistema con Windows en marcha."
                        Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
         </StackPanel>
 
@@ -113,6 +113,13 @@
 
                     <Border Style="{StaticResource Card}" Margin="0,12,0,0">
                         <StackPanel>
+                            <TextBlock Text="Modo de copia" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+                            <RadioButton IsChecked="{Binding UseSmartCopy}" GroupName="Mode" Content="Copia inteligente (recomendada)" FontWeight="SemiBold" />
+                            <TextBlock Text="De los volúmenes NTFS solo copia los bloques en uso; es mucho más rápida. Las demás particiones se copian enteras."
+                                       Style="{StaticResource Hint}" Margin="20,2,0,8" />
+                            <RadioButton IsChecked="{Binding UseSectorCopy}" GroupName="Mode" Content="Sector a sector" FontWeight="SemiBold" />
+                            <TextBlock Text="Copia todos los sectores, también el espacio libre. Más lenta; útil con sistemas de archivos que no reconoce."
+                                       Style="{StaticResource Hint}" Margin="20,2,0,14" />
                             <CheckBox IsChecked="{Binding Verify}" Content="Verificar la copia al terminar (recomendado)" FontWeight="SemiBold" />
                             <TextBlock Text="Vuelve a leer el destino y lo compara con lo copiado. Tarda algo más, pero confirma que el clon es idéntico."
                                        Style="{StaticResource Hint}" Margin="20,4,0,0" />

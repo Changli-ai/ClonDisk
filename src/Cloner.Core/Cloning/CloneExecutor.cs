@@ -36,16 +36,16 @@ internal sealed class CloneExecutor
         ArgumentNullException.ThrowIfNull(plan);
 
         var started = _time.GetTimestamp();
-        var verifyBytes = plan.Options.Verify ? plan.BytesToCopy : 0;
-        var meter = new ProgressMeter(plan.Steps.Sum(s => s.Length) + verifyBytes, _time);
         var state = new RunState();
         LogPlan(plan);
 
         IBlockDevice? source = null;
         IBlockDevice? target = null;
+        ProgressMeter? meter = null;
+        var volumes = new VolumeSources();
         try
         {
-            progress?.Report(meter.Snapshot(ClonePhase.Preparing, "Comprobando los discos"));
+            Report(progress, ClonePhase.Preparing, "Comprobando los discos");
             source = _access.Open(plan.Source, writable: false);
             target = _access.Open(plan.Target, writable: true);
             CheckDevices(plan, source, target);
@@ -53,15 +53,25 @@ internal sealed class CloneExecutor
             CheckTargetTable(target, plan);
             cancellation.ThrowIfCancellationRequested();
 
-            using (_access.LockVolumes(Volumes(plan.SourcePartitions), dismount: false))
             using (_access.LockVolumes(Volumes(plan.TargetPartitions), dismount: true))
+            using (LockSourceVolumes(plan))
             {
                 CloneLog.VolumesLocked(_log);
+                OpenVolumeSources(plan, volumes, progress);
+                cancellation.ThrowIfCancellationRequested();
+
+                var ranges = Expand(plan, source, volumes);
+                var dataBytes = ranges.Where(r => r.Step.WritesData).Sum(r => r.Length);
+                meter = new ProgressMeter(ranges.Sum(r => r.Length) + (plan.Options.Verify ? dataBytes : 0), _time);
+
                 state.Phase = ClonePhase.Copying;
-                var written = Copy(plan, source, target, head, state, meter, progress, cancellation);
+                var written = Copy(plan, ranges, source, target, head, state, meter, progress, cancellation);
                 target.Flush();
                 state.TargetComplete = true;
                 CloneLog.CopyFinished(_log, state.BytesWritten, state.DataHash);
+
+                // Las instantáneas ya no hacen falta: se liberan antes de verificar.
+                volumes.Release(completed: true);
 
                 if (plan.Options.Verify)
                 {
@@ -108,6 +118,7 @@ internal sealed class CloneExecutor
         }
         finally
         {
+            volumes.Release(completed: false);
             if (target is not null && state.TargetModified)
             {
                 RefreshLayout(target);
@@ -115,6 +126,158 @@ internal sealed class CloneExecutor
 
             target?.Dispose();
             source?.Dispose();
+        }
+    }
+
+    private static void Report(IProgress<CloneProgress>? progress, ClonePhase phase, string item) =>
+        progress?.Report(new CloneProgress { Phase = phase, CurrentItem = item });
+
+    /// <summary>
+    /// Bloquea los volúmenes del origen que se leen del disco (los de las instantáneas no hacen
+    /// falta). La partición EFI puede estar abierta por Windows; si no se puede bloquear se copia
+    /// igualmente, porque no se modifica durante el uso normal.
+    /// </summary>
+    private CompositeLock LockSourceVolumes(ClonePlan plan)
+    {
+        var locks = new CompositeLock();
+        if (plan.SourceIsReadOnly)
+        {
+            return locks;
+        }
+
+        try
+        {
+            var snapshotted = plan.SnapshotPartitions.ToHashSet();
+            var toLock = plan.SourcePartitions.Where(p => p.Volume is not null && !snapshotted.Contains(p)).ToList();
+            var required = toLock.Where(p => p.Kind != PartitionKind.EfiSystem).ToList();
+            if (required.Count > 0)
+            {
+                locks.Add(_access.LockVolumes(Volumes(required), dismount: false));
+            }
+
+            foreach (var partition in toLock.Where(p => p.Kind == PartitionKind.EfiSystem))
+            {
+                try
+                {
+                    locks.Add(_access.LockVolumes(Volumes([partition]), dismount: false));
+                }
+                catch (CloneException ex)
+                {
+                    CloneLog.LockSkipped(_log, DescribePartition(partition), ex.Message);
+                }
+            }
+
+            return locks;
+        }
+        catch
+        {
+            locks.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Crea las instantáneas y abre los volúmenes que se leen desde ellas o con su mapa de bits.</summary>
+    private void OpenVolumeSources(ClonePlan plan, VolumeSources volumes, IProgress<CloneProgress>? progress)
+    {
+        var snapshotPartitions = plan.SnapshotPartitions;
+        if (snapshotPartitions.Count > 0)
+        {
+            var names = string.Join(", ", snapshotPartitions.Select(DescribePartition));
+            Report(progress, ClonePhase.Preparing, $"Creando instantáneas: {names}");
+            volumes.Snapshots = _access.CreateSnapshots(snapshotPartitions.Select(p => p.Volume!.Path).ToList(), plan.Source.SectorSize);
+            CloneLog.SnapshotsCreated(_log, names);
+        }
+
+        foreach (var step in plan.Steps.Where(s => s.Partition is not null && (s.FromSnapshot || s.UsedBlocksOnly)))
+        {
+            var partition = step.Partition!;
+            if (!volumes.ByPartition.ContainsKey(partition))
+            {
+                volumes.ByPartition[partition] = step.FromSnapshot
+                    ? volumes.Snapshots!.Open(partition.Volume!.Path)
+                    : _access.OpenVolume(partition.Volume!.Path, plan.Source.SectorSize);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Convierte los pasos del plan en tramos concretos: de qué dispositivo se lee cada uno y en
+    /// qué posición del destino se escribe. Con copia inteligente, solo los bloques en uso.
+    /// </summary>
+    private List<CopyRange> Expand(ClonePlan plan, IBlockDevice disk, VolumeSources volumes)
+    {
+        var ranges = new List<CopyRange>();
+        foreach (var step in plan.Steps)
+        {
+            var before = ranges.Count;
+            switch (step.Kind)
+            {
+                case CloneStepKind.Copy:
+                    ranges.Add(new CopyRange(step, disk, step.Offset, step.Offset, step.Length));
+                    break;
+
+                case CloneStepKind.CopyPartition:
+                    ExpandPartition(step, disk, volumes, ranges);
+                    break;
+
+                default:
+                    // Borrados y tablas: el contenido se genera al producir los bloques.
+                    ranges.Add(new CopyRange(step, null, 0, step.Offset, step.Length));
+                    break;
+            }
+
+            var added = ranges.Skip(before).ToList();
+            var bytes = added.Sum(r => r.Length);
+            var description = step.Description;
+            CloneLog.StepExpanded(_log, description, bytes, added.Count);
+        }
+
+        return ranges;
+    }
+
+    private static void ExpandPartition(CloneStep step, IBlockDevice disk, VolumeSources volumes, List<CopyRange> ranges)
+    {
+        var partition = step.Partition!;
+        var partitionStart = partition.OffsetBytes;
+        if (!volumes.ByPartition.TryGetValue(partition, out var volume))
+        {
+            ranges.Add(new CopyRange(step, disk, step.Offset, step.Offset, step.Length));
+            return;
+        }
+
+        // Tramos relativos al principio de la partición.
+        var from = step.Offset - partitionStart;
+        var to = step.End - partitionStart;
+        var deviceEnd = volume.Length;
+        var used = step.UsedBlocksOnly ? volume.ReadUsedRanges() : null;
+
+        // Con copia inteligente, lo que la instantánea no deja leer (el final de la partición,
+        // fuera de los clústeres de NTFS) se copia igualmente, desde el disco.
+        IEnumerable<ByteRange> wanted = used is null
+            ? [new ByteRange(0, partition.SizeBytes)]
+            : [.. used, new ByteRange(deviceEnd, partition.SizeBytes - deviceEnd)];
+
+        foreach (var range in wanted)
+        {
+            var start = Math.Max(range.Offset, from);
+            var end = Math.Min(range.End, to);
+            if (end <= start)
+            {
+                continue;
+            }
+
+            // Lo que cae dentro del volumen se lee de él; si la partición es mayor, el resto, del disco.
+            var inVolumeEnd = Math.Min(end, deviceEnd);
+            if (inVolumeEnd > start)
+            {
+                ranges.Add(new CopyRange(step, volume.Device, start, partitionStart + start, inVolumeEnd - start));
+            }
+
+            var rawStart = Math.Max(start, deviceEnd);
+            if (end > rawStart)
+            {
+                ranges.Add(new CopyRange(step, disk, partitionStart + rawStart, partitionStart + rawStart, end - rawStart));
+            }
         }
     }
 
@@ -162,6 +325,7 @@ internal sealed class CloneExecutor
 
     private List<WrittenChunk> Copy(
         ClonePlan plan,
+        List<CopyRange> ranges,
         IBlockDevice source,
         IBlockDevice target,
         byte[] head,
@@ -193,7 +357,7 @@ internal sealed class CloneExecutor
                 {
                     try
                     {
-                        Produce(plan, source, head, zeros, free, full, written, overall, token);
+                        Produce(plan, ranges, source, head, zeros, free, full, written, overall, token);
                     }
                     catch (Exception ex)
                     {
@@ -265,9 +429,10 @@ internal sealed class CloneExecutor
         }
     }
 
-    /// <summary>Hilo lector: recorre los pasos y entrega bloques listos para escribir.</summary>
+    /// <summary>Hilo lector: recorre los tramos y entrega bloques listos para escribir.</summary>
     private void Produce(
         ClonePlan plan,
+        List<CopyRange> ranges,
         IBlockDevice source,
         byte[] head,
         AlignedBuffer zeros,
@@ -278,15 +443,21 @@ internal sealed class CloneExecutor
         CancellationToken token)
     {
         var targetSectors = plan.Target.SizeBytes / plan.Target.SectorSize;
+        CloneStep? current = null;
 
-        foreach (var step in plan.Steps)
+        foreach (var range in ranges)
         {
-            CloneLog.StepStarted(_log, step.Description, step.Offset, step.End);
+            var step = range.Step;
+            if (!ReferenceEquals(step, current))
+            {
+                current = step;
+                CloneLog.StepStarted(_log, step.Description, step.Offset, step.End);
+            }
 
-            for (var offset = step.Offset; offset < step.End; offset += ChunkBytes)
+            for (var offset = range.TargetOffset; offset < range.End; offset += ChunkBytes)
             {
                 token.ThrowIfCancellationRequested();
-                var length = (int)Math.Min(ChunkBytes, step.End - offset);
+                var length = (int)Math.Min(ChunkBytes, range.End - offset);
 
                 if (step.Kind == CloneStepKind.Clear)
                 {
@@ -300,8 +471,13 @@ internal sealed class CloneExecutor
                 switch (step.Kind)
                 {
                     case CloneStepKind.Copy:
-                        source.Read(offset, data);
+                        range.Source!.Read(range.SourceOffset + (offset - range.TargetOffset), data);
                         item = DescribeOffset(plan.SourcePartitions, offset) ?? step.Description;
+                        break;
+
+                    case CloneStepKind.CopyPartition:
+                        range.Source!.Read(range.SourceOffset + (offset - range.TargetOffset), data);
+                        item = DescribePartition(step.Partition!);
                         break;
 
                     case CloneStepKind.WriteBackupGpt:
@@ -424,7 +600,8 @@ internal sealed class CloneExecutor
     {
         var source = plan.Source.Describe(Culture);
         var target = plan.Target.Describe(Culture);
-        CloneLog.PlanStarted(_log, plan.Options.Verify ? "sí" : "no", plan.AdjustsGpt ? "sí" : "no");
+        var mode = CloneText.Mode(plan.Mode);
+        CloneLog.PlanStarted(_log, mode, plan.Options.Verify ? "sí" : "no", plan.AdjustsGpt ? "sí" : "no");
         CloneLog.PlanDisk(_log, "Origen", source, plan.Source.SerialNumber, plan.Source.Identifier, plan.Source.Location);
         CloneLog.PlanDisk(_log, "Destino", target, plan.Target.SerialNumber, plan.Target.Identifier, plan.Target.Location);
         foreach (var partition in plan.TargetPartitions)
@@ -477,6 +654,57 @@ internal sealed class CloneExecutor
     }
 
     private readonly record struct Chunk(AlignedBuffer Buffer, int Length, long Offset, bool IsClear, string Item);
+
+    /// <summary>Un tramo concreto: se lee de <paramref name="Source"/> (nulo si se genera) y se escribe en el destino.</summary>
+    private sealed record CopyRange(CloneStep Step, IBlockDevice? Source, long SourceOffset, long TargetOffset, long Length)
+    {
+        public long End => TargetOffset + Length;
+    }
+
+    /// <summary>Instantáneas y volúmenes abiertos durante la copia; se liberan en orden.</summary>
+    private sealed class VolumeSources
+    {
+        public ISnapshotSet? Snapshots { get; set; }
+        public Dictionary<PartitionInfo, IVolumeSource> ByPartition { get; } = [];
+
+        public void Release(bool completed)
+        {
+            foreach (var volume in ByPartition.Values)
+            {
+                volume.Dispose();
+            }
+
+            ByPartition.Clear();
+            if (Snapshots is not null)
+            {
+                if (completed)
+                {
+                    Snapshots.Complete();
+                }
+
+                Snapshots.Dispose();
+                Snapshots = null;
+            }
+        }
+    }
+
+    /// <summary>Varios bloqueos que se liberan juntos.</summary>
+    private sealed class CompositeLock : IDisposable
+    {
+        private readonly List<IDisposable> _locks = [];
+
+        public void Add(IDisposable item) => _locks.Add(item);
+
+        public void Dispose()
+        {
+            foreach (var item in _locks)
+            {
+                item.Dispose();
+            }
+
+            _locks.Clear();
+        }
+    }
 
     private readonly record struct WrittenChunk(long Offset, int Length, ulong Hash);
 }

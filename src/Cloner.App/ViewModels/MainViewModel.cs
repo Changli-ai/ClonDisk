@@ -29,6 +29,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     public ObservableCollection<DiskViewModel> Disks { get; } = [];
 
+    /// <summary>Ya se intentó leer los discos al menos una vez (con o sin éxito).</summary>
+    public bool HasLoaded { get; private set; }
+
     [ObservableProperty]
     public partial DiskViewModel? SelectedDisk { get; set; }
 
@@ -66,6 +69,10 @@ public sealed partial class MainViewModel : ObservableObject
             Disks.Clear();
             SelectedDisk = null;
             StatusMessage = ex.Message;
+        }
+        finally
+        {
+            HasLoaded = true;
         }
     }
 

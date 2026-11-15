@@ -5,10 +5,60 @@ particiones entre HDD y SSD (HDD↔SSD, HDD↔HDD, SSD↔SSD; SATA, M.2 y NVMe, 
 incluido el disco del sistema: al retirar el disco original y poner el clon, el equipo debe
 arrancar y funcionar exactamente igual.
 
-**Estado actual:** etapas 0 y 1 completadas. Etapa 2 (clonado sector a sector de un disco de
-datos a otro igual o mayor) implementada en el motor, la CLI y la interfaz. Todas sus pruebas
-pasan, incluidas las de integración con VHD ejecutadas como administrador; falta que el usuario
-la dé por buena.
+**Estado actual:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
+sistema en caliente): instantáneas VSS, copia inteligente, planificador y ejecutor hechos. Pasan
+las 134 pruebas unitarias y las 15 de integración como administrador (con VSS real sobre VHD).
+
+**Pendiente de la etapa 3, por decisión del usuario (15/11/2026): la prueba de arranque del
+clon del disco del sistema la hará él manualmente**, en VirtualBox y en hardware real. Se llegó
+a lanzar el clon del disco 0 a un VHD dinámico en `C:\ClonDiskPruebas` con la CLI: el plan fue
+correcto (unos 355 GB desde instantáneas de C: y Recuperación, EFI y MSR enteras, GPT ajustada
+a un destino 680 KB mayor), pero copiar y escribir en el mismo SSD QLC (Intel 660p) iba a 27–70
+MB/s y se canceló al 12 %. Recomendación para la prueba: destino en otro disco, al menos 1 MiB
+mayor que el origen (el formato VHD redondea su tamaño hacia abajo); en VirtualBox, máquina con
+EFI y controladora NVMe. La etapa no está completa hasta que el usuario confirme que arranca.
+
+Si el proceso de clonado se termina a la fuerza (no cancelado), sus instantáneas no
+persistentes quedan hasta el siguiente reinicio: `vssadmin delete shadows` no puede borrar las
+de contexto de copia de seguridad («fuera del contexto permitido»). Cancelar con Ctrl+C o desde
+la interfaz sí las libera. Posible mejora: limpiarlas al arrancar la app con `VSS_CTX_ALL` y
+`DeleteSnapshots`.
+
+Decisiones del usuario para la etapa 3 (14/11/2026): la copia inteligente (solo bloques en uso
+de NTFS) se adelanta desde la etapa 4, porque el clon de prueba del disco del sistema va a un
+VHD dinámico en C: y sector a sector no cabría (954 GB frente a 605 GB libres); se permite
+crear instantáneas VSS de C: en las pruebas de esta etapa.
+
+**Incidente (14/11/2026):** el equipo se bloqueó (pantalla azul `0x0A`, firma
+`AV_nt!KiInsertTimerTable`, lista de temporizadores del núcleo dañada) segundos después de
+lanzar `SnapshotTests` como administrador, al crear el VHD. Analizado el volcado con cdb
+(`!analyze -v`): el fallo está en `dxgmms2!VIDMM_RECYCLE_HEAP_MGR::AddToUnlockDebounce`, el
+gestor de memoria de vídeo de DirectX, en un hilo del proceso `System`; nada de la pila tiene
+que ver con discos virtuales, VSS ni la app. Causa probable: el controlador gráfico de Intel
+(`igdkmd64.sys`, de agosto de 2021). Se recomendó al usuario actualizarlo.
+
+**Segundo bloqueo (14/11/2026, 17:12):** mismo código `0x0A`, ahora en
+`nt!KiRemoveEntryTimer` (al retirar un temporizador, desde una DPC), justo al crear la
+instantánea VSS del VHD de origen en `VhdCloneTests`. Las dos veces coincidieron con la
+aparición de un disco o volumen nuevo (montar un VHD, crear una instantánea), así que ya no se
+trata como casualidad: algún controlador libera un temporizador que sigue activo, y el fallo
+salta después donde caiga (la primera vez, en el gestor de vídeo). No hay filtros de disco ni
+de volumen de terceros; entre los controladores de terceros cargados hay varios antiguos de
+almacenamiento y plataforma: Intel RST `iaStorAC` (2020), Intel `igdkmd64` (2021), Intel DPTF
+(2019), Realtek `RtsUer` (2019). Las pruebas con VHD y VSS como administrador y el clon del
+disco del sistema quedan en pausa hasta que el usuario decida (actualizar controladores, usar
+Driver Verifier o seguir asumiendo el riesgo).
+
+**Causa encontrada (tercer bloqueo, 14/11/2026 17:37, ya con el controlador gráfico
+actualizado):** el temporizador dañado está dentro del objeto de dispositivo de `volsnap` (el
+controlador de VSS de Windows) sobre el volumen de un VHD de prueba (`!pool` → etiqueta `Devi`;
+`!devobj` → `\Driver\volsnap`, encima de `HarddiskVolume7`). Es una carrera de `volsnap`: quitar
+un volumen pocos segundos después de liberar una instantánea suya deja un temporizador vivo en
+memoria liberada, y el equipo cae al vencer, a veces en otra prueba. Los controladores de Intel
+no tenían que ver. Medida: `VirtualDisk.Detach` espera `SnapshotQuietPeriod` (90 s) desde el
+último uso de instantáneas (`VirtualDisk.NoteSnapshotUse`). El clon del disco del sistema no
+quita C:, pero al desmontar un VHD de destino también hay que dejar pasar ese tiempo. Riesgo
+para la app real: que el usuario desconecte un disco de origen externo justo al terminar.
 
 Pendiente de la etapa 1: la lectura de SMART y de BitLocker solo funciona como administrador
 y **no se ha comprobado en una consola elevada** (las sesiones de desarrollo no lo son).
@@ -155,7 +205,7 @@ está hecho.
 | Control de disco y volumen | `DeviceIoControl`: `IOCTL_DISK_GET_DRIVE_GEOMETRY_EX`, `IOCTL_DISK_GET/SET_DRIVE_LAYOUT_EX`, `IOCTL_DISK_CREATE_DISK`, `IOCTL_DISK_UPDATE_PROPERTIES`, `IOCTL_STORAGE_QUERY_PROPERTY`, `FSCTL_LOCK_VOLUME`, `FSCTL_DISMOUNT_VOLUME` |
 | Bloques en uso (NTFS) | `FSCTL_GET_VOLUME_BITMAP`, `FSCTL_GET_NTFS_VOLUME_DATA` |
 | Enumeración y salud | Storage Management API por WMI (`MSFT_Disk`, `MSFT_Partition`, `MSFT_PhysicalDisk`, `MSFT_StorageReliabilityCounter`) |
-| Instantánea en caliente | **VSS** (Volume Shadow Copy Service). Vía por decidir en la etapa 3: AlphaVSS, WMI `Win32_ShadowCopy` o un shim nativo en C++ |
+| Instantánea en caliente | **VSS** desde C# con la interfaz COM `IVssBackupComponents` generada por CsWin32 (sin AlphaVSS ni DLL nativa): contexto de copia de seguridad con escritores, tipo COPY, instantáneas no persistentes |
 | Arranque | `bcdboot` y edición del BCD; partición EFI en GPT, sector de arranque en MBR |
 | Medio de arranque | WinPE, construido a partir de Windows ADK o del entorno de recuperación local (WinRE) |
 | Verificación | XxHash3 por bloque de 4 MiB y XxHash128 de todo lo escrito (`System.IO.Hashing`) |
@@ -213,7 +263,22 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
   bloque a bloque. Si no coincide, vuelve a borrar la tabla. Antes de escribir comprueba que el
   dispositivo abierto y su tabla son los del plan, bloquea los volúmenes del origen y bloquea y
   desmonta los del destino.
-- Sin VSS (llega en la etapa 3), un volumen del origen en uso impide clonar.
+- Clonado en caliente y copia inteligente (etapa 3):
+  - El plan tiene un paso `CopyPartition` por partición. Los volúmenes NTFS/ReFS montados de un
+    disco que no es de solo lectura se leen de una **instantánea VSS** (`FromSnapshot`), tomada
+    a la vez para todos (`Snapshots/VssSnapshotSet`); no se bloquean. El resto de volúmenes del
+    origen se bloquean; si la partición EFI no se deja bloquear, se copia igualmente (Windows no
+    la modifica en uso normal).
+  - Copia inteligente (`CloneMode.UsedBlocks`, por defecto): de los volúmenes NTFS solo se
+    copian los clústeres en uso según `FSCTL_GET_VOLUME_BITMAP` (`NtfsUsage`, huecos de menos de
+    1 MiB incluidos) más el final del volumen (copia del sector de arranque); el espacio sin
+    particionar no se copia, salvo dentro de una partición extendida (tablas EBR). Sector a
+    sector (CLI `--sector`) lo copia todo.
+  - El disco del sistema solo puede ser origen si hay instantáneas (no en WinPE:
+    `Elevation.IsWinPE`). Sigue sin poder ser destino.
+  - El ejecutor convierte los pasos en tramos (`CopyRange`) con su dispositivo de origen antes
+    de copiar; las instantáneas se liberan al terminar la copia, antes de verificar.
+  - Leído desde una instantánea, un volumen con BitLocker queda sin cifrar en el clon (aviso).
 - `IDiskAccess`/`IBlockDevice` se sustituyen en las pruebas por discos en memoria
   (`MemoryDisk`) o archivos (`DiskDevice.OpenFile`), que recorren la misma E/S sin caché.
 - `Devices/DiskDevice` usa CsWin32 solo para funciones y constantes; las estructuras de los
@@ -226,8 +291,13 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
   pruebas de integración y cualquier prueba manual durante el desarrollo deben usarlo.
 
 Interfaz: el botón «Clonar disco…» abre `CloneWindow` (`CloneViewModel`), un asistente con
-cuatro fases: elegir discos, revisar el plan con lo que se borrará y confirmar, progreso con
-cancelación y resultado con exportación del registro.
+cuatro fases: elegir discos (y el modo de copia), revisar el plan con lo que se borrará y
+confirmar, progreso con cancelación y resultado con exportación del registro.
+
+Arranque de la interfaz: `App.OnStartup` (sin `StartupUri`) muestra `SplashWindow`, la pantalla
+de carga (logotipo, nombre, barra indeterminada, estado y versión), mientras lee los discos con
+el `MainViewModel`; se ve al menos 1,5 s y después abre `MainWindow` con los datos ya cargados
+(`MainViewModel.HasLoaded` evita leerlos dos veces).
 
 ## Etapas
 
@@ -237,7 +307,7 @@ cancelación y resultado con exportación del registro.
 | 1 | Inspección (solo lectura) | RF-01 a RF-04 | La app y la CLI listan discos y particiones reales |
 | 2 | Clonado sector a sector de un disco de datos, destino ≥ origen | RF-12 (sector), RF-30 a RF-33, RS-01 a RS-07 | VHD clonado e idéntico por hash |
 | 3 | Disco del sistema en caliente, clon idéntico arrancable | RF-10, RF-11 | El clon arranca en una máquina virtual y en hardware real |
-| 4 | Copia inteligente y ajuste de particiones | RF-12 (inteligente), RF-13, RF-16, RF-18 | Clon a disco mayor con la partición extendida |
+| 4 | Ajuste de particiones (la copia inteligente se adelantó a la etapa 3) | RF-13, RF-16, RF-18 | Clon a disco mayor con la partición extendida |
 | 5 | Destino más pequeño y conversión MBR↔GPT | RF-14, RF-17 | HDD grande clonado a SSD menor que arranca |
 | 6 | Clonado de partición individual | RF-15 | Partición copiada a una unidad externa |
 | 7 | Modo rescate para discos con fallos | RF-20 a RF-22 | Clon completado con errores de lectura simulados |
@@ -247,8 +317,10 @@ cancelación y resultado con exportación del registro.
 
 ## Riesgos y decisiones abiertas
 
-- **VSS desde .NET.** VSS es una API COM pensada para C++. Hay que validar la vía elegida al
-  empezar la etapa 3.
+- **VSS desde .NET.** Interfaz COM generada por CsWin32, validada en ejecución con
+  `SnapshotTests` y `VhdCloneTests`. El dispositivo de una instantánea declara la longitud de la
+  partición pero no deja leer lo que queda tras los clústeres de NTFS (copia del sector de
+  arranque): `DiskDevice.ReadableLength` lo mide y ese final se lee del disco.
 - **WPF dentro de WinPE.** No está garantizado que una app WPF de .NET 10 funcione en WinPE;
   por eso el motor y la CLI son independientes. Validar al empezar la etapa 8.
 - **Sectores 512 frente a 4K nativo.** Hasta nuevo aviso, origen y destino deben tener el
@@ -275,6 +347,8 @@ dotnet test tests/Cloner.Core.Tests          # solo unitarias
 dotnet run --project src/Cloner.Cli -- list  # CLI: discos y particiones (solo lectura)
 dotnet run --project src/Cloner.Cli -- plan 1 2                   # plan de clonado, sin escribir
 dotnet run --project src/Cloner.Cli -- clone 1 2 --virtual-only   # clona; pide escribir BORRAR
+                                             # --sector: sector a sector; --no-verify: sin verificar
+                                             # sin consola: cmd /c "echo BORRAR| clondisk-cli clone …"
 dotnet run --project src/Cloner.App          # interfaz; pide elevación (UAC)
 ```
 

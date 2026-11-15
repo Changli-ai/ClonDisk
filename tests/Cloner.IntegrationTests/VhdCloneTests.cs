@@ -11,6 +11,7 @@ namespace Cloner.IntegrationTests;
 /// Clonado real entre discos virtuales VHD (etapa 2). Solo escribe en los VHD que crea, y el
 /// servicio se usa en modo «solo destinos virtuales». Requiere una consola de administrador.
 /// </summary>
+[Collection(VirtualDiskTests.Name)]
 public sealed class VhdCloneTests : IDisposable
 {
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "cloner-vhd", Guid.NewGuid().ToString("N"));
@@ -53,9 +54,9 @@ public sealed class VhdCloneTests : IDisposable
         source.Detach();
         source.Attach(readOnly: true);
 
-        var (plan, result) = await Clone(source, target);
+        var (plan, result) = await Clone(source, target, CloneMode.SectorBySector);
 
-        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+        Assert.True(result.Outcome == CloneOutcome.Succeeded, result.Message);
         Assert.True(result.Verified, result.Message);
         Assert.True(File.Exists(result.LogPath));
 
@@ -109,7 +110,7 @@ public sealed class VhdCloneTests : IDisposable
         var sourceInfo = source.Info();
 
         var (_, result) = await Clone(source, target);
-        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+        Assert.True(result.Outcome == CloneOutcome.Succeeded, result.Message);
         Assert.True(result.Verified, result.Message);
 
         // Con el origen desmontado, Windows reconoce el clon por sí solo.
@@ -124,6 +125,36 @@ public sealed class VhdCloneTests : IDisposable
 
         var volume = clone.Partitions.Single(p => p.Volume?.Label == "ORIGEN").Volume!;
         Assert.Equal(expected, File.ReadAllBytes(Path.Combine(volume.Path, "muestra.bin")));
+    }
+
+    [AdminFact]
+    public async Task VolumeInUseIsClonedFromASnapshot()
+    {
+        var source = NewDisk("origen.vhd", 64, label: "ORIGEN");
+        var target = NewDisk("destino.vhd", 64);
+        var expected = WriteSampleFile(source);
+        var volume = source.Info().Partitions.Single(p => p.Volume?.Label == "ORIGEN").Volume!;
+
+        // Un archivo abierto en exclusiva impide bloquear el volumen: solo se puede copiar en caliente.
+        CloneResult result;
+        ClonePlan plan;
+        using (var busy = new FileStream(Path.Combine(volume.Path, "abierto.bin"), FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        {
+            busy.Write(new byte[4096]);
+            busy.Flush(flushToDisk: true);
+            (plan, result) = await Clone(source, target);
+        }
+
+        Assert.True(Assert.Single(plan.Steps, s => s.Kind == CloneStepKind.CopyPartition && s.Partition!.Volume?.Label == "ORIGEN").FromSnapshot);
+        Assert.True(result.Outcome == CloneOutcome.Succeeded, result.Message);
+        Assert.True(result.Verified, result.Message);
+        Assert.True(result.BytesWritten < 48L * 1024 * 1024, $"Con copia inteligente no debería copiarse todo: {result.BytesWritten} bytes.");
+
+        source.Detach();
+        target.Detach();
+        target.Attach();
+        var clone = target.Info().Partitions.Single(p => p.Volume?.Label == "ORIGEN").Volume!;
+        Assert.Equal(expected, File.ReadAllBytes(Path.Combine(clone.Path, "muestra.bin")));
     }
 
     [AdminFact]
@@ -168,10 +199,10 @@ public sealed class VhdCloneTests : IDisposable
         return data;
     }
 
-    private async Task<(ClonePlan Plan, CloneResult Result)> Clone(VirtualDisk source, VirtualDisk target)
+    private async Task<(ClonePlan Plan, CloneResult Result)> Clone(VirtualDisk source, VirtualDisk target, CloneMode mode = CloneMode.UsedBlocks)
     {
         var service = new CloneService(new DiskInventory(), _directory);
-        var planned = service.CreatePlan(source.Number, target.Number, new CloneOptions { VirtualTargetOnly = true });
+        var planned = service.CreatePlan(source.Number, target.Number, new CloneOptions { VirtualTargetOnly = true, Mode = mode });
         Assert.True(planned.Plan is not null, string.Join(" ", planned.Problems));
 
         // Doble comprobación antes de escribir: el destino es el VHD de esta prueba.
@@ -182,6 +213,14 @@ public sealed class VhdCloneTests : IDisposable
             Assert.Equal(target.FilePath, plan.Target.Location, ignoreCase: true);
         }
 
-        return (plan, await service.RunAsync(plan, null, CancellationToken.None));
+        try
+        {
+            return (plan, await service.RunAsync(plan, null, CancellationToken.None));
+        }
+        finally
+        {
+            // El clonado en caliente usa instantáneas: hay que esperar antes de quitar los discos.
+            VirtualDisk.NoteSnapshotUse();
+        }
     }
 }

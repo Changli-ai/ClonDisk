@@ -30,7 +30,6 @@ internal sealed class VirtualDisk : IDisposable
     /// </summary>
     public static VirtualDisk Create(string path, int sizeMiB, string? label = null)
     {
-        var before = VirtualDiskNumbers();
         var script = new StringBuilder()
             .AppendLine(CultureInfo.InvariantCulture, $"create vdisk file=\"{path}\" maximum={sizeMiB} type=fixed")
             .AppendLine(CultureInfo.InvariantCulture, $"select vdisk file=\"{path}\"")
@@ -42,25 +41,68 @@ internal sealed class VirtualDisk : IDisposable
                 .AppendLine(CultureInfo.InvariantCulture, $"format fs=ntfs quick label={label}");
         }
 
-        RunDiskPart(script.ToString());
-        return new VirtualDisk(path, FindNewDisk(before));
+        try
+        {
+            RunDiskPart(script.ToString());
+            return new VirtualDisk(path, FindByLocation(path));
+        }
+        catch
+        {
+            // Que un fallo a medias no deje el disco montado.
+            TryDetach(path);
+            throw;
+        }
     }
 
     /// <summary>Monta el disco; en solo lectura, Windows no puede modificarlo mientras tanto.</summary>
     public void Attach(bool readOnly = false)
     {
-        var before = VirtualDiskNumbers();
         RunDiskPart($"select vdisk file=\"{FilePath}\"\r\nattach vdisk{(readOnly ? " readonly" : string.Empty)}\r\n");
-        Number = FindNewDisk(before);
         IsAttached = true;
+        Number = FindByLocation(FilePath);
     }
 
     public void Detach()
     {
         if (IsAttached)
         {
+            WaitForSnapshotDriver();
             RunDiskPart($"select vdisk file=\"{FilePath}\"\r\ndetach vdisk\r\n");
             IsAttached = false;
+        }
+    }
+
+    /// <summary>
+    /// Tiempo que se deja pasar entre la última instantánea VSS y quitar un disco. Quitar un
+    /// volumen pocos segundos después de liberar una instantánea suya hizo que volsnap dejara un
+    /// temporizador en memoria liberada y el equipo se bloqueara (0x0A, 14/11/2026).
+    /// </summary>
+    public static readonly TimeSpan SnapshotQuietPeriod = TimeSpan.FromSeconds(90);
+
+    private static readonly Lock SnapshotLock = new();
+    private static DateTime _lastSnapshotUse = DateTime.MinValue;
+
+    /// <summary>Las pruebas lo llaman cuando terminan de usar instantáneas (también al clonar en caliente).</summary>
+    public static void NoteSnapshotUse()
+    {
+        lock (SnapshotLock)
+        {
+            _lastSnapshotUse = DateTime.UtcNow;
+        }
+    }
+
+    private static void WaitForSnapshotDriver()
+    {
+        DateTime last;
+        lock (SnapshotLock)
+        {
+            last = _lastSnapshotUse;
+        }
+
+        var remaining = last + SnapshotQuietPeriod - DateTime.UtcNow;
+        if (remaining > TimeSpan.Zero)
+        {
+            Thread.Sleep(remaining);
         }
     }
 
@@ -90,24 +132,37 @@ internal sealed class VirtualDisk : IDisposable
         }
     }
 
-    private static HashSet<int> VirtualDiskNumbers() =>
-        new DiskInventory().GetDisks().Where(d => d.Bus == BusKind.Virtual).Select(d => d.Number).ToHashSet();
-
-    /// <summary>El disco que acaba de aparecer; Windows tarda un momento en publicarlo.</summary>
-    private static int FindNewDisk(HashSet<int> before)
+    /// <summary>
+    /// Número del disco montado desde <paramref name="path"/>: Windows informa la ruta del VHD como
+    /// ubicación del disco. Tarda un momento en publicarlo.
+    /// </summary>
+    private static int FindByLocation(string path)
     {
-        for (var attempt = 0; attempt < 20; attempt++)
+        for (var attempt = 0; attempt < 40; attempt++)
         {
-            var added = VirtualDiskNumbers().Except(before).ToList();
-            if (added.Count == 1)
+            var disk = new DiskInventory().GetDisks()
+                .FirstOrDefault(d => d.Bus == BusKind.Virtual && string.Equals(d.Location, path, StringComparison.OrdinalIgnoreCase));
+            if (disk is not null)
             {
-                return added[0];
+                return disk.Number;
             }
 
             Thread.Sleep(250);
         }
 
-        throw new InvalidOperationException("No apareció el disco virtual montado.");
+        throw new InvalidOperationException($"No apareció el disco virtual montado desde {path}.");
+    }
+
+    private static void TryDetach(string path)
+    {
+        try
+        {
+            RunDiskPart($"select vdisk file=\"{path}\"\r\ndetach vdisk\r\n");
+        }
+        catch (InvalidOperationException)
+        {
+            // No estaba montado.
+        }
     }
 
     private static void RunDiskPart(string script)
@@ -134,4 +189,11 @@ internal sealed class VirtualDisk : IDisposable
             File.Delete(scriptPath);
         }
     }
+}
+
+/// <summary>Las pruebas que montan VHD se ejecutan una tras otra: diskpart y VDS no toleran bien el paralelismo.</summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class VirtualDiskTests
+{
+    public const string Name = "Discos virtuales";
 }
