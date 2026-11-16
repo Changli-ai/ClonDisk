@@ -24,6 +24,9 @@ public sealed record CloneOptions
 
     /// <summary>El clon recibe identificadores de disco y de partición nuevos (RF-18).</summary>
     public bool NewIdentifiers { get; init; }
+
+    /// <summary>Estilo de la tabla del destino (RF-17); nulo para conservar el del origen.</summary>
+    public PartitionStyle? TargetStyle { get; init; }
 }
 
 /// <summary>Modo de copia (RF-12).</summary>
@@ -57,6 +60,12 @@ public enum CloneStepKind
     /// <summary>Escribir la copia de respaldo GPT al final del destino, ajustada a su tamaño.</summary>
     WriteBackupGpt,
 
+    /// <summary>
+    /// Partición reducida (RF-14): con el clon montado se formatea y se copian los archivos de su
+    /// volumen, leídos de la instantánea. No pasa por la copia por bloques ni por su verificación.
+    /// </summary>
+    CopyFiles,
+
     /// <summary>Copiar el principio del disco, con la tabla de particiones. Siempre es el último paso.</summary>
     WritePartitionTable,
 }
@@ -66,8 +75,8 @@ public sealed record CloneStep(CloneStepKind Kind, long Offset, long Length, str
 {
     public long End => Offset + Length;
 
-    /// <summary>Si el paso deja en el destino datos que la verificación debe comprobar.</summary>
-    public bool WritesData => Kind != CloneStepKind.Clear;
+    /// <summary>Si el paso deja en el destino bloques que la verificación debe comprobar.</summary>
+    public bool WritesData => Kind is not (CloneStepKind.Clear or CloneStepKind.CopyFiles);
 
     /// <summary>Partición del origen que se copia (pasos <see cref="CloneStepKind.CopyPartition"/>).</summary>
     public PartitionInfo? Partition { get; init; }
@@ -126,6 +135,9 @@ public sealed record ClonePlan
     /// <summary>Identificadores nuevos del clon (RF-18), o nulo si conserva los del origen.</summary>
     public TableIdentity? NewIdentity { get; init; }
 
+    /// <summary>Estilo de la tabla del clon: el del origen o el de la conversión (RF-17).</summary>
+    public PartitionStyle TargetStyle => Layout.Style ?? Source.PartitionStyle;
+
     /// <summary>La tabla del destino se genera de nuevo en lugar de copiarse.</summary>
     public bool RebuildsTable => Layout.Changes || NewIdentity is not null;
 
@@ -134,7 +146,9 @@ public sealed record ClonePlan
     /// rehacer su arranque si es un disco de Windows con otros identificadores o posiciones.
     /// </summary>
     public bool NeedsFinishing =>
-        Layout.Placements.Any(p => p.Grows)
+        Layout.Style is not null
+        || Layout.Created.Count > 0
+        || Layout.Placements.Any(p => p.Grows || p.Shrinks)
         || NewIdentity is not null
         || (Source.PartitionStyle == PartitionStyle.Mbr && Layout.Placements.Any(p => p.Moves));
 
@@ -147,7 +161,10 @@ public sealed record ClonePlan
     /// Bytes de datos que se escribirán en el destino, sin contar el borrado previo. Con copia
     /// inteligente es una estimación: el tamaño exacto se conoce al leer los volúmenes.
     /// </summary>
-    public long BytesToCopy => Steps.Where(s => s.WritesData).Sum(s => s.ExpectedBytes);
+    public long BytesToCopy => Steps.Where(s => s.WritesData || s.Kind == CloneStepKind.CopyFiles).Sum(s => s.ExpectedBytes);
+
+    /// <summary>Pasos de copia por archivos de las particiones reducidas.</summary>
+    public IReadOnlyList<CloneStep> FileSteps => Steps.Where(s => s.Kind == CloneStepKind.CopyFiles).ToList();
 
     /// <summary>Volúmenes del origen que se leen desde una instantánea.</summary>
     public IReadOnlyList<PartitionInfo> SnapshotPartitions =>

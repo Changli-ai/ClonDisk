@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Hashing;
 using Cloner.Core.Cloning;
 using Cloner.Core.Devices;
+using Cloner.Core.FileCopy;
 using Cloner.Core.Inventory;
 using Cloner.Core.PartitionTables;
 
@@ -324,6 +325,8 @@ internal sealed class FakeDiskAccess : IDiskAccess
     {
         public IVolumeSource Open(string volumePath) => volumes[volumePath];
 
+        public string RootFor(string volumePath) => $@"\\?\GLOBALROOT\Instantanea{index}\{volumePath}";
+
         public void Complete() => owner.Snapshots[index] = owner.Snapshots[index] with { Completed = true };
 
         public void Dispose() => owner.Snapshots[index] = owner.Snapshots[index] with { Disposed = true };
@@ -364,6 +367,38 @@ internal sealed class FakeFinisher : ITargetFinisher
     public void RepairBoot(BootRepair repair) => Repairs.Add(repair);
 
     public void WaitBeforeRemovingVolumes() => QuietWaits++;
+
+    public List<(string Volume, string Label)> Formatted { get; } = [];
+    public List<(string Volume, string Label)> Labels { get; } = [];
+    public List<(string Source, string Target)> FileCopies { get; } = [];
+
+    /// <summary>Si no es nulo, la copia por archivos lanza esta excepción.</summary>
+    public Exception? FileCopyFailure { get; set; }
+
+    public IReadOnlyList<string> FileCopyErrors { get; set; } = [];
+
+    public List<string> FileSystems { get; } = [];
+
+    public void FormatVolume(string volumePath, string label, string fileSystem = "NTFS")
+    {
+        Formatted.Add((volumePath, label));
+        FileSystems.Add(fileSystem);
+    }
+
+    public void SetVolumeLabel(string volumePath, string label) => Labels.Add((volumePath, label));
+
+    public FileCopyResult CopyFiles(string sourceRoot, string targetRoot, CopyExclusions exclusions, Action<long, string>? progress, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (FileCopyFailure is not null)
+        {
+            throw FileCopyFailure;
+        }
+
+        FileCopies.Add((sourceRoot, targetRoot));
+        progress?.Invoke(1000, @"\archivo.txt");
+        return new FileCopyResult(10, 2, 0, 1000, 1, FileCopyErrors);
+    }
 }
 
 /// <summary>Recoge los avisos de progreso en el mismo hilo, sin contexto de sincronización.</summary>

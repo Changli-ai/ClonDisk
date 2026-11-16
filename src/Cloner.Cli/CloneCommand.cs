@@ -24,7 +24,7 @@ internal static class CloneCommand
         if (!TryParse(args, out var source, out var target, out var options, out var error))
         {
             Console.Error.WriteLine(error);
-            Console.Error.WriteLine("Uso: clondisk-cli " + (execute ? "clone" : "plan") + " <disco origen> <disco destino> [--sector] [--extend|--proportional] [--align|--no-align] [--new-ids] [--no-verify] [--virtual-only]");
+            Console.Error.WriteLine("Uso: clondisk-cli " + (execute ? "clone" : "plan") + " <disco origen> <disco destino> [--sector] [--extend|--proportional] [--align|--no-align] [--new-ids] [--gpt|--mbr] [--no-verify] [--virtual-only]");
             return Usage;
         }
 
@@ -82,6 +82,7 @@ internal static class CloneCommand
 
         output.WriteLine();
         output.WriteLine($"  {CloneText.CopyAmount(plan)}. Verificación al terminar: {(plan.Options.Verify ? "sí" : "no")}.");
+        output.WriteLine($"  Tabla de particiones del destino: {CloneText.TableStyle(plan)}.");
 
         var layout = CloneText.Layout(plan);
         if (layout.Count > 0)
@@ -189,6 +190,12 @@ internal static class CloneCommand
                     break;
                 case "--new-ids":
                     options = options with { NewIdentifiers = true };
+                    break;
+                case "--gpt":
+                    options = options with { TargetStyle = PartitionStyle.Gpt };
+                    break;
+                case "--mbr":
+                    options = options with { TargetStyle = PartitionStyle.Mbr };
                     break;
                 case "--virtual-only":
                     options = options with { VirtualTargetOnly = true };

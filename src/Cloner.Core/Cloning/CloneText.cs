@@ -42,11 +42,27 @@ public static class CloneText
     {
         ArgumentNullException.ThrowIfNull(plan);
         var size = ByteSize.Format(plan.BytesToCopy, Culture);
-        var estimated = plan.Steps.Any(s => s.UsedBlocksOnly);
-        return plan.Mode == CloneMode.UsedBlocks
+        var estimated = plan.Steps.Any(s => s.UsedBlocksOnly || s.Kind == CloneStepKind.CopyFiles);
+        var text = plan.Mode == CloneMode.UsedBlocks
             ? $"Se copiarán {(estimated ? "unos " : string.Empty)}{size}, solo los bloques en uso"
             : $"Se copiarán {size}, sector a sector";
+        return plan.FileSteps.Count > 0 ? text + " (archivo a archivo en las particiones reducidas)" : text;
     }
+
+    /// <summary>«GPT (se convierte desde MBR)» o el estilo del origen.</summary>
+    public static string TableStyle(ClonePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var target = Style(plan.TargetStyle);
+        return plan.Layout.Style is null ? target : $"{target} (se convierte desde {Style(plan.Source.PartitionStyle)})";
+    }
+
+    public static string Style(PartitionStyle style) => style switch
+    {
+        PartitionStyle.Gpt => "GPT",
+        PartitionStyle.Mbr => "MBR",
+        _ => "sin inicializar",
+    };
 
     /// <summary>«312 MB/s», o un guion mientras no hay medida.</summary>
     public static string Speed(double bytesPerSecond) =>
@@ -81,18 +97,22 @@ public static class CloneText
             return [];
         }
 
-        return plan.Layout.Placements.Select(placement =>
+        var created = plan.Layout.Created.Select(c =>
+            $"{(c.Kind == PartitionKind.EfiSystem ? "Partición EFI nueva (FAT32)" : "Partición reservada de Microsoft nueva")}: {ByteSize.Format(c.Size, Culture)}");
+        var placements = plan.Layout.Placements.Select(placement =>
         {
             var partition = placement.Partition;
             var name = partition.DriveLetter is { } letter ? $"{letter}:" : partition.Volume?.Label ?? InventoryText.Kind(partition.Kind);
-            var size = placement.Grows
+            var size = placement.Grows || placement.Shrinks
                 ? $"{ByteSize.Format(partition.SizeBytes, Culture)} → {ByteSize.Format(placement.TargetSize, Culture)}"
                 : ByteSize.Format(partition.SizeBytes, Culture);
             var position = placement.Moves
                 ? $", se mueve de {ByteSize.Format(partition.OffsetBytes, Culture)} a {ByteSize.Format(placement.TargetOffset, Culture)} del inicio"
                 : string.Empty;
-            return $"Partición {partition.Number} ({name}): {size}{position}";
-        }).ToList();
+            var files = placement.Shrinks ? ", se copia archivo a archivo" : string.Empty;
+            return $"Partición {partition.Number} ({name}): {size}{position}{files}";
+        });
+        return created.Concat(placements).ToList();
     }
 
     public static string Sizing(Cloner.Core.Layout.SizeMode mode) => mode switch

@@ -157,25 +157,15 @@ public class ClonePlannerTests
     }
 
     [Fact]
-    public void SmallerTargetIsRejectedWithBothSizes()
+    public void SmallerTargetWithoutPartitionsIsRejectedWithBothSizes()
     {
-        var (source, table) = GptSource(12 * MiB);
+        var image = Gpt(12 * MiB, SourceGuid);
+        var source = TestDisks.Info(1, image, []);
 
-        var result = Plan(source, Target(8 * MiB), table);
+        var result = Plan(source, Target(8 * MiB), TestDisks.Table(image));
 
         Assert.Null(result.Plan);
         Assert.Contains(result.Problems, p => p.Contains("más pequeño", StringComparison.Ordinal) && p.Contains("12 MB", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void SlightlySmallerTargetIsExplainedInBytes()
-    {
-        var (source, table) = GptSource();
-
-        var result = Plan(source, Target() with { SizeBytes = (8 * MiB) - 512 }, table);
-
-        Assert.Null(result.Plan);
-        Assert.Contains(result.Problems, p => p.Contains("es 512 bytes más pequeño", StringComparison.Ordinal));
     }
 
     [Fact]

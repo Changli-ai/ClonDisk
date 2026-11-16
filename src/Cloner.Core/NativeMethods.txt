@@ -27,3 +27,15 @@ RegUnLoadKey
 OpenProcessToken
 LookupPrivilegeValue
 AdjustTokenPrivileges
+BackupRead
+BackupWrite
+CreateHardLink
+FindFirstFileEx
+FindNextFile
+FindClose
+GetFileInformationByHandle
+SetFileInformationByHandle
+SetFileShortName
+FILE_BASIC_INFO
+GetFileInformationByHandleEx
+SetVolumeLabel

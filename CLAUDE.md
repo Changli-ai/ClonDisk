@@ -10,7 +10,15 @@ tabla reconstruida, ampliación de NTFS e identificadores nuevos con reparación
 Pasan 158 pruebas unitarias y las 17 de integración como administrador (incluidas ampliar un
 VHD de 64 a 128 MB y clonar con identificadores nuevos junto al original). Sin probar: la
 reparación del arranque de un clon de Windows con identificadores nuevos, que queda para la
-prueba manual del usuario. Falta que el usuario dé la etapa por buena.
+prueba manual del usuario. El 15/11/2026 el usuario empezó la etapa 5, con lo que la 4 queda
+aceptada; sus pruebas de arranque (etapas 3 y 4) siguen pendientes.
+
+**Etapa 5 en curso** (destino más pequeño, RF-14, y conversión MBR↔GPT, RF-17): implementada en
+el motor, la CLI (`--gpt`/`--mbr`) y la interfaz. Pasan 176 pruebas unitarias y las 21 de
+integración como administrador (incluidas reducir un VHD de 128 a 64 MB con flujos alternativos y
+enlaces duros, y convertir un VHD de GPT a MBR y de vuelta a GPT). Pendiente: la prueba manual de
+arranque (clon de Windows a un disco menor y clon convertido, también el código de arranque MBR
+propio), que hará el usuario. Limitación: al convertir a MBR solo se marca activa la partición del Windows en uso.
 
 **Estado anterior:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
 sistema en caliente): instantáneas VSS, copia inteligente, planificador y ejecutor hechos. Pasan
@@ -337,6 +345,31 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
     hace el remate, se esperan 90 s (volsnap) y se escribe la tabla definitiva.
   - La reparación del arranque con identificadores nuevos no está probada arrancando un clon:
     queda para la prueba manual del usuario.
+- Destino más pequeño y conversión (etapa 5):
+  - `LayoutPlanner` acepta un destino menor si las particiones caben (se rehace la tabla) o si
+    reduciendo las NTFS de datos con más espacio libre, sin bajar de lo usado + 10 % (mínimo
+    16 MiB, `MinimumSize`), caben; si no, lo impide diciendo el tamaño necesario. Sector a
+    sector no puede reducir.
+  - Una partición reducida es un paso `CopyFiles`: se borra su primer MiB, se copia el resto
+    por bloques, se monta el clon con la tabla provisional, se formatea en NTFS (WMI
+    `MSFT_Volume.Format`, etiqueta «ClonDisk incompleto») y se llena con `FileCopy/FileTreeCopier`
+    desde la instantánea (que se mantiene hasta entonces). Al final recibe la etiqueta del origen.
+    Si falla o se cancela, se desmontan los volúmenes del clon y se borra la tabla.
+  - `FileTreeCopier`: BackupRead/BackupWrite (datos, flujos alternativos, seguridad, datos de
+    enlace), enlaces duros por identificador de archivo, nombres cortos, atributos y fechas
+    (las de las carpetas al final). Excluye lo de `CopyExclusions` (paginación, hibernación,
+    `System Volume Information` y, si el origen es el disco del sistema, `FilesNotToBackup`).
+    Los archivos EFS no se copian; los comprimidos con WOF salen descomprimidos.
+  - Conversión (`StyleConversion`, `CloneOptions.TargetStyle`): siempre con identificadores
+    nuevos y particiones alineadas a 1 MiB. A MBR: como mucho 4 particiones, se descarta la MSR,
+    el código de arranque es propio (`PartitionTables/MbrBootCode`: busca la partición activa, lee
+    su primer sector con INT 13h extendida y salta a él; `IOCTL_DISK_CREATE_DISK` no escribe código
+    de arranque, se comprobó) y la partición de Windows queda activa. Ese código solo se probará
+    arrancando un clon convertido. A GPT: si un Windows no tiene partición EFI, se crean
+    una EFI de 100 MiB y una MSR de 16 MiB al principio; la EFI figura como de datos en la tabla
+    provisional para poder formatearla en FAT32, y la tabla definitiva se escribe al final.
+    `MountedDevices.Map` traduce entre las dos formas de identidad y `bcdboot` rehace el arranque
+    en el modo nuevo (UEFI o BIOS).
 - `IDiskAccess`/`IBlockDevice` se sustituyen en las pruebas por discos en memoria
   (`MemoryDisk`) o archivos (`DiskDevice.OpenFile`), que recorren la misma E/S sin caché.
 - `Devices/DiskDevice` usa CsWin32 solo para funciones y constantes; las estructuras de los
@@ -395,8 +428,9 @@ el `MainViewModel`; se ve al menos 1,5 s y después abre `MainWindow` con los da
   por eso el motor y la CLI son independientes. Validar al empezar la etapa 8.
 - **Sectores 512 frente a 4K nativo.** Hasta nuevo aviso, origen y destino deben tener el
   mismo tamaño de sector lógico; si no, se rechaza el clonado.
-- **Destino más pequeño (etapa 5).** No admite copia bloque a bloque: exige particiones
-  nuevas, copia de archivos desde la instantánea y regenerar el arranque.
+- **Destino más pequeño (etapa 5).** Resuelto copiando archivo a archivo las particiones
+  reducidas. Riesgos: un Windows con CompactOS ocupa más descomprimido y los archivos con
+  compresión NTFS salen sin comprimir, así que el margen sobre lo usado puede quedarse corto.
 - **Cifrado.** Leído desde la instantánea, el contenido sale descifrado; el clon queda sin
   cifrar y hay que reactivar el cifrado después.
 - **Hardware distinto (etapa 9).** El arranque depende de los controladores de almacenamiento
@@ -418,7 +452,7 @@ dotnet run --project src/Cloner.Cli -- list  # CLI: discos y particiones (solo l
 dotnet run --project src/Cloner.Cli -- plan 1 2                   # plan de clonado, sin escribir
 dotnet run --project src/Cloner.Cli -- clone 1 2 --virtual-only   # clona; pide escribir BORRAR
                                              # --sector: sector a sector; --no-verify: sin verificar
-                                             # --extend | --proportional; --align | --no-align; --new-ids
+                                             # --extend | --proportional; --align | --no-align; --new-ids; --gpt | --mbr
                                              # sin consola: cmd /c "echo BORRAR| clondisk-cli clone …"
 dotnet run --project src/Cloner.App          # interfaz; pide elevación (UAC)
 ```

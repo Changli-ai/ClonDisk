@@ -1,3 +1,5 @@
+using Cloner.Core.FileCopy;
+
 namespace Cloner.Core.Cloning;
 
 /// <summary>Datos para rehacer el arranque de un clon de Windows con otros identificadores o posiciones.</summary>
@@ -19,6 +21,15 @@ internal interface ITargetFinisher
     /// </summary>
     /// <exception cref="CloneException">No aparecieron a tiempo.</exception>
     IReadOnlyDictionary<long, string> WaitForVolumes(int diskNumber, IReadOnlyCollection<long> partitionOffsets);
+
+    /// <summary>Formatea el volumen (formato rápido) con la etiqueta indicada.</summary>
+    /// <param name="fileSystem">NTFS, o FAT32 para una partición EFI.</param>
+    void FormatVolume(string volumePath, string label, string fileSystem = "NTFS");
+
+    void SetVolumeLabel(string volumePath, string label);
+
+    /// <summary>Copia archivo a archivo el contenido de un volumen en otro (RF-14).</summary>
+    FileCopyResult CopyFiles(string sourceRoot, string targetRoot, CopyExclusions exclusions, Action<long, string>? progress, CancellationToken cancellation);
 
     /// <summary>Amplía el sistema de archivos del volumen para que ocupe toda su partición.</summary>
     void ExtendVolume(string volumePath, long partitionBytes, int sectorSize);

@@ -56,9 +56,18 @@ internal static class ClonePlanner
 
         // RF-13, RF-16, RF-18: distribución e identificadores del destino.
         var layoutWarnings = new List<string>();
-        var layout = LayoutPlanner.Plan(source, target, sourceTable, options.Sizing, options.Alignment, problems, layoutWarnings);
-        var identity = options.NewIdentifiers && sourceTable.Style != PartitionStyle.Raw
-            ? TableIdentity.CreateNew(sourceTable.Style, source.Partitions)
+        var converting = StyleConversion.Requested(sourceTable, options.TargetStyle);
+        var targetStyle = converting ? options.TargetStyle!.Value : sourceTable.Style;
+        var createEfi = converting && StyleConversion.Check(source, targetStyle, problems, layoutWarnings);
+        var layout = LayoutPlanner.Plan(source, target, sourceTable, options.Sizing, options.Alignment, problems, layoutWarnings, converting ? targetStyle : null, createEfi);
+        if (layout.Placements.Any(p => p.Shrinks) && options.Mode == CloneMode.SectorBySector)
+        {
+            problems.Add("El destino es más pequeño y hay que reducir particiones, lo que no es posible copiando sector a sector. Usa la copia inteligente.");
+        }
+
+        // Una tabla de otro estilo lleva siempre identificadores nuevos.
+        var identity = (options.NewIdentifiers || converting) && sourceTable.Style != PartitionStyle.Raw
+            ? TableIdentity.CreateNew(targetStyle, source.Partitions, layout.Created.Count)
             : null;
         var rebuild = layout.Changes || identity is not null;
 
@@ -82,7 +91,7 @@ internal static class ClonePlanner
             SourcePartitions = source.Partitions,
             TargetPartitions = target.Partitions,
             Steps = steps,
-            AdjustsGpt = sourceTable.Gpt is not null && (target.SizeBytes > source.SizeBytes || rebuild),
+            AdjustsGpt = targetStyle == PartitionStyle.Gpt && (target.SizeBytes > source.SizeBytes || rebuild),
             Layout = rebuild ? layout : TargetLayout.Same(source.Partitions),
             NewIdentity = identity,
             Warnings = warnings,
@@ -182,15 +191,6 @@ internal static class ClonePlanner
             problems.Add($"Los discos tienen distinto tamaño de sector lógico ({source.LogicalSectorSize} B en el origen y {target.LogicalSectorSize} B en el destino).");
         }
 
-        if (target.SizeBytes < source.SizeBytes)
-        {
-            var targetSize = Size(target.SizeBytes);
-            var sourceSize = Size(source.SizeBytes);
-            problems.Add(targetSize == sourceSize
-                ? $"El destino es {Bytes(source.SizeBytes - target.SizeBytes)} bytes más pequeño que el origen ({Bytes(target.SizeBytes)} frente a {Bytes(source.SizeBytes)} bytes)."
-                : $"El destino ({targetSize}) es más pequeño que el origen ({sourceSize}).");
-        }
-
         if (source.SizeBytes < 2L * (PartitionTable.HeadBytes + TailClearBytes))
         {
             problems.Add($"El disco {source.Number} es demasiado pequeño para clonarlo.");
@@ -241,6 +241,17 @@ internal static class ClonePlanner
             warnings.Add("El clon tendrá el mismo identificador de disco que el origen: si ambos quedan conectados a la vez, Windows dejará uno de los dos sin conexión.");
         }
 
+        foreach (var placement in layout.Placements.Where(p => p.Shrinks))
+        {
+            warnings.Add($"La partición {placement.Partition.Number} ({VolumeName(placement.Partition)}) pasa de {Size(placement.Partition.SizeBytes)} a {Size(placement.TargetSize)}: "
+                + "se formatea de nuevo y sus archivos se copian uno a uno. No se copian los archivos de paginación e hibernación (Windows los vuelve a crear) ni los cifrados con EFS.");
+        }
+
+        if (layout.FitsSmallerTarget && !layout.Placements.Any(p => p.Shrinks))
+        {
+            warnings.Add("El destino es más pequeño que el origen, pero las particiones caben sin reducirlas.");
+        }
+
         foreach (var placement in layout.Placements.Where(p => p.Grows))
         {
             warnings.Add($"La partición {placement.Partition.Number} ({VolumeName(placement.Partition)}) pasa de {Size(placement.Partition.SizeBytes)} a {Size(placement.TargetSize)}: su sistema de archivos se amplía al terminar la copia.");
@@ -260,7 +271,7 @@ internal static class ClonePlanner
                 : $"El destino es mayor: los {Size(extra)} sobrantes quedan sin asignar.");
         }
 
-        if (source.PartitionStyle == PartitionStyle.Mbr && target.LogicalSectorSize > 0
+        if ((layout.Style ?? source.PartitionStyle) == PartitionStyle.Mbr && target.LogicalSectorSize > 0
             && target.SizeBytes / target.LogicalSectorSize > MbrLimitSectors)
         {
             warnings.Add($"Con tabla MBR solo se pueden usar los primeros {Size(MbrLimitSectors * target.LogicalSectorSize)} del destino.");
@@ -363,9 +374,21 @@ internal static class ClonePlanner
             new(CloneStepKind.Clear, tailClearStart, targetBytes - tailClearStart, "Borrar el final del destino"),
         };
 
+        foreach (var created in layout.Created)
+        {
+            var name = created.Kind == PartitionKind.EfiSystem ? "la partición EFI nueva" : "la partición reservada nueva";
+            steps.Add(new CloneStep(CloneStepKind.Clear, created.Offset, Math.Min(created.Size, LayoutPlanner.MiB), $"Borrar el principio de {name}"));
+        }
+
         foreach (var placement in layout.Placements)
         {
             var partition = placement.Partition;
+            if (placement.Shrinks)
+            {
+                steps.AddRange(FileSteps(source, placement, environment));
+                continue;
+            }
+
             var step = PartitionStep(source, partition, partition.OffsetBytes, partition.OffsetBytes + partition.SizeBytes, environment, options);
             var change = placement.Moves ? (placement.Grows ? " a su nueva posición, ampliada" : " a su nueva posición") : string.Empty;
 
@@ -386,14 +409,46 @@ internal static class ClonePlanner
             });
         }
 
-        if (table.Gpt is { } gpt)
+        if ((layout.Style ?? table.Style) == PartitionStyle.Gpt)
         {
-            var length = (gpt.EntriesSectors + 1L) * gpt.SectorSize;
+            var sectorSize = source.LogicalSectorSize;
+            var entriesSectors = layout.Style is null ? table.Gpt!.EntriesSectors : StyleConversion.GptEntriesSectors(sectorSize);
+            var length = (entriesSectors + 1L) * sectorSize;
             steps.Add(new CloneStep(CloneStepKind.WriteBackupGpt, targetBytes - length, length, "Escribir la GPT de respaldo al final del destino"));
         }
 
-        steps.Add(new CloneStep(CloneStepKind.WritePartitionTable, 0, head, "Escribir la tabla de particiones nueva"));
+        steps.Add(new CloneStep(
+            CloneStepKind.WritePartitionTable,
+            0,
+            head,
+            layout.Style is { } style ? $"Escribir la tabla de particiones nueva, en {StyleConversion.Name(style)}" : "Escribir la tabla de particiones nueva"));
         return steps;
+    }
+
+    /// <summary>
+    /// Partición reducida: se borra su principio, para que no quede rastro de lo que hubiera en el
+    /// destino, y después del resto de la copia se formatea y se llena archivo a archivo.
+    /// </summary>
+    private static IEnumerable<CloneStep> FileSteps(DiskInfo source, PartitionPlacement placement, CloneEnvironment environment)
+    {
+        var partition = placement.Partition;
+        var volume = partition.Volume!;
+        var fromSnapshot = environment.SnapshotsAvailable && !source.IsReadOnly && SupportsSnapshots(volume.FileSystem);
+        var clear = Math.Min(placement.TargetSize, LayoutPlanner.MiB);
+        yield return new CloneStep(CloneStepKind.Clear, placement.TargetOffset, clear, $"Borrar el principio de la partición {partition.Number} en el destino");
+        yield return new CloneStep(
+            CloneStepKind.CopyFiles,
+            placement.TargetOffset,
+            placement.TargetSize,
+            $"Copiar los archivos de la partición {partition.Number} ({VolumeName(partition)})"
+                + (fromSnapshot ? " desde una instantánea" : string.Empty)
+                + $" a una partición de {Size(placement.TargetSize)}")
+        {
+            Partition = partition,
+            FromSnapshot = fromSnapshot,
+            EstimatedBytes = volume.UsedBytes,
+            SourceOffset = partition.OffsetBytes,
+        };
     }
 
     /// <summary>Pasos para el tramo [start, end) del origen: una copia por partición y los huecos entre ellas.</summary>

@@ -128,7 +128,9 @@
 
                     <Border Style="{StaticResource Card}" Margin="0,12,0,0">
                         <StackPanel>
-                            <TextBlock Text="Si el destino es mayor" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+                            <TextBlock Text="Tamaño de las particiones" Style="{StaticResource SectionTitle}" Margin="0,0,0,4" />
+                            <TextBlock Text="Si el destino es más pequeño, las particiones NTFS de datos se reducen (sin bajar de lo que ocupan) y se copian archivo a archivo. Si el destino es mayor:"
+                                       Style="{StaticResource Hint}" Margin="0,0,0,8" />
                             <RadioButton IsChecked="{Binding ExtendMain}" GroupName="Sizing" Content="Ampliar la partición principal (recomendado)" FontWeight="SemiBold" />
                             <TextBlock Text="La partición de Windows, o la de datos más grande, crece hasta ocupar el espacio sobrante."
                                        Style="{StaticResource Hint}" Margin="20,2,0,8" />
@@ -141,6 +143,20 @@
                             <CheckBox IsChecked="{Binding NewIdentifiers}" Content="Dar identificadores nuevos al clon" FontWeight="SemiBold" />
                             <TextBlock Text="Para usar el clon conectado a la vez que el original. Si es un disco de Windows, se rehace su arranque al terminar."
                                        Style="{StaticResource Hint}" Margin="20,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Tabla de particiones del destino" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+                            <RadioButton IsChecked="{Binding KeepStyle}" GroupName="Style" Content="La misma que el origen (recomendado)" FontWeight="SemiBold" />
+                            <TextBlock Text="El clon arranca igual que el original." Style="{StaticResource Hint}" Margin="20,2,0,8" />
+                            <RadioButton IsChecked="{Binding ToGpt}" GroupName="Style" Content="GPT, para equipos con arranque UEFI" FontWeight="SemiBold" />
+                            <TextBlock Text="Si el origen es un Windows que arranca en BIOS, se crea una partición EFI y se rehace su arranque."
+                                       Style="{StaticResource Hint}" Margin="20,2,0,8" />
+                            <RadioButton IsChecked="{Binding ToMbr}" GroupName="Style" Content="MBR, para equipos con arranque BIOS (heredado)" FontWeight="SemiBold" />
+                            <TextBlock Text="Como mucho 4 particiones y 2 TB. Windows arrancará en modo BIOS, sin arranque seguro."
+                                       Style="{StaticResource Hint}" Margin="20,2,0,0" />
                         </StackPanel>
                     </Border>
 

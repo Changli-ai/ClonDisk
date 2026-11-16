@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Management;
 using System.Runtime.InteropServices;
 using Cloner.Core.Cloning;
+using Cloner.Core.FileCopy;
 using Cloner.Core.Inventory;
 using Cloner.Core.Layout;
 using Microsoft.Win32;
@@ -42,6 +44,41 @@ internal sealed class TargetFinisher(IDiskInventory inventory) : ITargetFinisher
             Thread.Sleep(500);
         }
     }
+
+    public void FormatVolume(string volumePath, string label, string fileSystem = "NTFS")
+    {
+        var path = WithSeparator(volumePath);
+        using var searcher = new ManagementObjectSearcher(
+            @"root\Microsoft\Windows\Storage",
+            $"SELECT * FROM MSFT_Volume WHERE Path = '{path.Replace(@"\", @"\\", StringComparison.Ordinal)}'");
+        using var results = searcher.Get();
+        using var volume = results.Cast<ManagementObject>().FirstOrDefault()
+            ?? throw new CloneException($"No se encontró el volumen {path} para formatearlo.");
+        using var input = volume.GetMethodParameters("Format");
+        input["FileSystem"] = fileSystem;
+        input["FileSystemLabel"] = label;
+        input["Full"] = false;
+        input["Force"] = true;
+        using var output = volume.InvokeMethod("Format", input, null);
+        var code = Convert.ToUInt32(output?["ReturnValue"] ?? uint.MaxValue, System.Globalization.CultureInfo.InvariantCulture);
+        if (code != 0)
+        {
+            throw new CloneException($"Windows no pudo formatear el volumen {path} (código {code}).");
+        }
+    }
+
+    public void SetVolumeLabel(string volumePath, string label)
+    {
+        if (!PInvoke.SetVolumeLabel(WithSeparator(volumePath), label))
+        {
+            throw new CloneException($"No se pudo poner la etiqueta al volumen {volumePath}.", new Win32Exception(Marshal.GetLastPInvokeError()));
+        }
+    }
+
+    public FileCopyResult CopyFiles(string sourceRoot, string targetRoot, CopyExclusions exclusions, Action<long, string>? progress, CancellationToken cancellation) =>
+        new FileTreeCopier(exclusions, withSecurity: true, progress, cancellation).Copy(sourceRoot, targetRoot);
+
+    private static string WithSeparator(string path) => path.EndsWith('\\') ? path : path + "\\";
 
     public void ExtendVolume(string volumePath, long partitionBytes, int sectorSize)
     {
@@ -93,8 +130,8 @@ internal sealed class TargetFinisher(IDiskInventory inventory) : ITargetFinisher
             return;
         }
 
-        EnablePrivilege("SeRestorePrivilege");
-        EnablePrivilege("SeBackupPrivilege");
+        Privileges.Enable(Privileges.Restore);
+        Privileges.Enable(Privileges.Backup);
         var status = PInvoke.RegLoadKey(Registry.LocalMachine.Handle, HiveName, hivePath);
         if (status != WIN32_ERROR.ERROR_SUCCESS)
         {
@@ -164,28 +201,4 @@ internal sealed class TargetFinisher(IDiskInventory inventory) : ITargetFinisher
     }
 
     private static void Unmount(char letter) => PInvoke.DeleteVolumeMountPoint($@"{letter}:\");
-
-    private static unsafe void EnablePrivilege(string name)
-    {
-        using var process = Process.GetCurrentProcess();
-        if (!PInvoke.OpenProcessToken(process.SafeHandle, TOKEN_ACCESS_MASK.TOKEN_ADJUST_PRIVILEGES | TOKEN_ACCESS_MASK.TOKEN_QUERY, out var token))
-        {
-            throw new CloneException($"No se pudo activar el privilegio {name}.", new Win32Exception(Marshal.GetLastPInvokeError()));
-        }
-
-        using (token)
-        {
-            if (!PInvoke.LookupPrivilegeValue(null, name, out var luid))
-            {
-                throw new CloneException($"No se pudo activar el privilegio {name}.", new Win32Exception(Marshal.GetLastPInvokeError()));
-            }
-
-            var privileges = new TOKEN_PRIVILEGES { PrivilegeCount = 1 };
-            privileges.Privileges[0] = new LUID_AND_ATTRIBUTES { Luid = luid, Attributes = TOKEN_PRIVILEGES_ATTRIBUTES.SE_PRIVILEGE_ENABLED };
-            if (!PInvoke.AdjustTokenPrivileges((HANDLE)token.DangerousGetHandle(), false, &privileges, 0, null, null) || Marshal.GetLastPInvokeError() != 0)
-            {
-                throw new CloneException($"No se pudo activar el privilegio {name}: hace falta ejecutar como administrador.");
-            }
-        }
-    }
 }

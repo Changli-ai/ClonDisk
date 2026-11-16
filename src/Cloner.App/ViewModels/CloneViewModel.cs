@@ -152,6 +152,47 @@ public sealed partial class CloneViewModel : ObservableObject
     [ObservableProperty]
     public partial bool NewIdentifiers { get; set; }
 
+    /// <summary>Estilo de la tabla del clon (RF-17); nulo para conservar el del origen.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(KeepStyle), nameof(ToGpt), nameof(ToMbr))]
+    public partial PartitionStyle? TargetStyle { get; set; }
+
+    public bool KeepStyle
+    {
+        get => TargetStyle is null;
+        set
+        {
+            if (value)
+            {
+                TargetStyle = null;
+            }
+        }
+    }
+
+    public bool ToGpt
+    {
+        get => TargetStyle == PartitionStyle.Gpt;
+        set
+        {
+            if (value)
+            {
+                TargetStyle = PartitionStyle.Gpt;
+            }
+        }
+    }
+
+    public bool ToMbr
+    {
+        get => TargetStyle == PartitionStyle.Mbr;
+        set
+        {
+            if (value)
+            {
+                TargetStyle = PartitionStyle.Mbr;
+            }
+        }
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSelecting), nameof(IsReviewing), nameof(IsRunning), nameof(IsFinished))]
     public partial CloneStage Stage { get; set; }
@@ -252,6 +293,7 @@ public sealed partial class CloneViewModel : ObservableObject
                 Mode = UseSmartCopy ? CloneMode.UsedBlocks : CloneMode.SectorBySector,
                 Sizing = Sizing,
                 NewIdentifiers = NewIdentifiers,
+                TargetStyle = TargetStyle,
             };
             var result = await Task.Run(() => _service.CreatePlan(source, target, options));
             if (result.Plan is not { } plan)
@@ -358,7 +400,8 @@ public sealed partial class CloneViewModel : ObservableObject
             ? plan.TargetPartitions.Select(CloneText.Partition).ToList()
             : ["El disco no tiene particiones, pero todo lo que contenga se sobrescribirá."];
         CopySummary = $"{CloneText.CopyAmount(plan)}. "
-            + (plan.Options.Verify ? "Al terminar se comprobará que el destino coincide." : "No se verificará al terminar.");
+            + (plan.Options.Verify ? "Al terminar se comprobará que el destino coincide." : "No se verificará al terminar.")
+            + $" Tabla de particiones del destino: {CloneText.TableStyle(plan)}.";
         Warnings = plan.Warnings;
         LayoutLines = CloneText.Layout(plan);
         ConfirmText = $"Entiendo que se borrará todo el contenido del disco {plan.Target.Number}.";

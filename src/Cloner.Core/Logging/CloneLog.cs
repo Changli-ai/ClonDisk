@@ -42,6 +42,18 @@ internal static partial class CloneLog
     [LoggerMessage(Level = LogLevel.Information, Message = "Windows montó {Count} volúmenes del clon.")]
     public static partial void CloneMounted(ILogger logger, int count);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Formateada {Partition} en el destino ({Bytes} bytes).")]
+    public static partial void VolumeFormatted(ILogger logger, string partition, long bytes);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Copiados los archivos de {Partition}: {Files} archivos, {Directories} carpetas, {Links} enlaces duros, {Bytes} bytes; {Skipped} excluidos y {Errors} con error.")]
+    public static partial void FilesCopied(ILogger logger, string partition, long files, long directories, long links, long bytes, long skipped, int errors);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No copiado: {Error}")]
+    public static partial void FileNotCopied(ILogger logger, string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "No se pudo invalidar el destino tras el fallo.")]
+    public static partial void InvalidateFailed(ILogger logger, Exception exception);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Ampliada {Partition} a {Bytes} bytes.")]
     public static partial void VolumeExtended(ILogger logger, string partition, long bytes);
 

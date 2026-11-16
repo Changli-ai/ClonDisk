@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO.Hashing;
 using System.Runtime.ExceptionServices;
 using Cloner.Core.Devices;
+using Cloner.Core.FileCopy;
 using Cloner.Core.Inventory;
 using Cloner.Core.Layout;
 using Cloner.Core.Logging;
@@ -19,6 +20,9 @@ internal sealed class CloneExecutor
 {
     internal const int ChunkBytes = 4 * 1024 * 1024;
     private const int BufferCount = 4;
+
+    /// <summary>Etiqueta de una partición reducida mientras se copian sus archivos.</summary>
+    internal const string IncompleteLabel = "ClonDisk incompleto";
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("es-ES");
 
     private readonly IDiskAccess _access;
@@ -56,11 +60,11 @@ internal sealed class CloneExecutor
             // origen, se copia con identificadores provisionales: con los del origen, Windows lo
             // dejaría sin conexión. Los definitivos se ponen al final.
             var targetSectors = plan.Target.SizeBytes / plan.Target.SectorSize;
-            var temporary = plan.NeedsFinishing && plan.NewIdentity is null;
-            var copyIdentity = temporary ? TableIdentity.CreateNew(plan.SourceTable.Style, plan.SourcePartitions) : plan.NewIdentity;
-            var built = plan.RebuildsTable
-                ? TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, plan.Source.SectorSize, copyIdentity)
-                : null;
+            // Con particiones nuevas (la EFI de una conversión) también se copia con una tabla
+            // provisional, en la que la EFI figura como de datos para poder formatearla.
+            var temporary = plan.NeedsFinishing && (plan.NewIdentity is null || plan.Layout.Created.Count > 0);
+            var copyIdentity = plan.NewIdentity ?? (temporary ? TableIdentity.CreateNew(plan.SourceTable.Style, plan.SourcePartitions) : null);
+            BuiltTable? built = null;
             CheckTargetTable(target, plan);
             cancellation.ThrowIfCancellationRequested();
 
@@ -68,21 +72,36 @@ internal sealed class CloneExecutor
             using (LockSourceVolumes(plan))
             {
                 CloneLog.VolumesLocked(_log);
+                if (plan.RebuildsTable)
+                {
+                    built = TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, plan.Source.SectorSize, copyIdentity, provisional: plan.Layout.Created.Count > 0);
+                }
+
                 OpenVolumeSources(plan, volumes, progress);
                 cancellation.ThrowIfCancellationRequested();
 
                 var ranges = Expand(plan, source, volumes);
                 var dataBytes = ranges.Where(r => r.Step.WritesData).Sum(r => r.Length);
-                meter = new ProgressMeter(ranges.Sum(r => r.Length) + (plan.Options.Verify ? dataBytes : 0), _time);
+                var fileBytes = plan.FileSteps.Sum(s => s.ExpectedBytes);
+                meter = new ProgressMeter(ranges.Sum(r => r.Length) + (plan.Options.Verify ? dataBytes : 0) + fileBytes, _time);
 
                 state.Phase = ClonePhase.Copying;
                 var written = Copy(plan, ranges, source, target, head, built, volumes, state, meter, progress, cancellation);
                 target.Flush();
-                state.TargetComplete = true;
+
+                // Con particiones reducidas, el clon no está completo hasta copiar sus archivos.
+                state.TargetComplete = plan.FileSteps.Count == 0;
                 CloneLog.CopyFinished(_log, state.BytesWritten, state.DataHash);
 
-                // Las instantáneas ya no hacen falta: se liberan antes de verificar.
-                volumes.Release(completed: true);
+                // Las instantáneas ya no hacen falta, salvo para copiar archivos: se liberan antes de verificar.
+                if (plan.FileSteps.Count == 0)
+                {
+                    volumes.Release(completed: true);
+                }
+                else
+                {
+                    volumes.ReleaseDevices();
+                }
 
                 if (plan.Options.Verify)
                 {
@@ -106,13 +125,23 @@ internal sealed class CloneExecutor
             state.Phase = ClonePhase.Finishing;
             if (plan.NeedsFinishing)
             {
-                FinishClone(plan, target, head, temporary, progress);
+                FinishClone(plan, target, head, temporary, volumes, state, meter, progress, cancellation);
             }
 
             progress?.Report(meter.Snapshot(ClonePhase.Finishing, "Terminando"));
-            return Finish(state, started, CloneOutcome.Succeeded, state.Verified
-                ? "El destino es idéntico a lo leído del origen."
-                : "La copia ha terminado, pero no se ha verificado.");
+            var summary = plan.FileSteps.Count > 0
+                ? state.Verified
+                    ? "La copia ha terminado: lo copiado por bloques se ha verificado y las particiones reducidas se han llenado archivo a archivo."
+                    : "La copia ha terminado (por bloques y archivo a archivo), pero no se ha verificado."
+                : state.Verified
+                    ? "El destino es idéntico a lo leído del origen."
+                    : "La copia ha terminado, pero no se ha verificado.";
+            if (state.FileErrors > 0)
+            {
+                summary += $" {state.FileErrors.ToString("N0", Culture)} archivos o carpetas no se pudieron copiar; están en el registro.";
+            }
+
+            return Finish(state, started, CloneOutcome.Succeeded, summary);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
@@ -206,7 +235,7 @@ internal sealed class CloneExecutor
             CloneLog.SnapshotsCreated(_log, names);
         }
 
-        foreach (var step in plan.Steps.Where(s => s.Partition is not null && (s.FromSnapshot || s.UsedBlocksOnly)))
+        foreach (var step in plan.Steps.Where(s => s.Kind != CloneStepKind.CopyFiles && s.Partition is not null && (s.FromSnapshot || s.UsedBlocksOnly)))
         {
             var partition = step.Partition!;
             if (!volumes.ByPartition.ContainsKey(partition))
@@ -236,6 +265,10 @@ internal sealed class CloneExecutor
 
                 case CloneStepKind.CopyPartition:
                     ExpandPartition(step, disk, volumes, ranges);
+                    break;
+
+                case CloneStepKind.CopyFiles:
+                    // Se copia por archivos con el clon montado, después de la copia por bloques.
                     break;
 
                 default:
@@ -564,7 +597,15 @@ internal sealed class CloneExecutor
         foreach (var placement in plan.Layout.Placements.Where(p => p.TargetOffset < headLength))
         {
             var partition = placement.Partition;
-            var length = (int)Math.Min(partition.SizeBytes, data.Length - placement.TargetOffset);
+            var length = (int)Math.Min(placement.TargetSize, data.Length - placement.TargetOffset);
+            if (placement.Shrinks)
+            {
+                // Se formatea después: no debe quedar el sistema de archivos del origen, con otro tamaño.
+                data.Slice((int)placement.TargetOffset, length).Clear();
+                continue;
+            }
+
+            length = (int)Math.Min(partition.SizeBytes, data.Length - placement.TargetOffset);
             using var buffer = new AlignedBuffer(length);
             if (volumes.ByPartition.TryGetValue(partition, out var volume) && volume.Length >= length)
             {
@@ -607,7 +648,16 @@ internal sealed class CloneExecutor
     /// arranque de un clon de Windows con otros identificadores o posiciones y, si se copió con
     /// identificadores provisionales, poner los definitivos.
     /// </summary>
-    private void FinishClone(ClonePlan plan, IBlockDevice target, byte[] head, bool temporary, IProgress<CloneProgress>? progress)
+    private void FinishClone(
+        ClonePlan plan,
+        IBlockDevice target,
+        byte[] head,
+        bool temporary,
+        VolumeSources sources,
+        RunState state,
+        ProgressMeter meter,
+        IProgress<CloneProgress>? progress,
+        CancellationToken cancellation)
     {
         var finisher = _access.Finisher;
         var sectorSize = plan.Source.SectorSize;
@@ -616,9 +666,38 @@ internal sealed class CloneExecutor
         Report(progress, ClonePhase.Finishing, "Esperando a que Windows monte el clon");
         target.Flush();
         target.RefreshLayout();
+        var createdEfi = plan.Layout.Created.FirstOrDefault(c => c.Kind == PartitionKind.EfiSystem);
         var offsets = plan.Layout.Placements.Where(p => p.Partition.Volume is not null).Select(p => p.TargetOffset).ToList();
+        if (createdEfi is not null)
+        {
+            offsets.Add(createdEfi.Offset);
+        }
+
         var volumes = finisher.WaitForVolumes(plan.Target.Number, offsets);
         CloneLog.CloneMounted(_log, volumes.Count);
+
+        if (createdEfi is not null)
+        {
+            Report(progress, ClonePhase.Finishing, "Formateando la partición EFI nueva");
+            finisher.FormatVolume(volumes[createdEfi.Offset], "EFI", "FAT32");
+            CloneLog.VolumeFormatted(_log, "Partición EFI nueva", createdEfi.Size);
+        }
+
+        if (plan.FileSteps.Count > 0)
+        {
+            try
+            {
+                CopyFileSteps(plan, volumes, sources, state, meter, progress, cancellation);
+            }
+            catch
+            {
+                InvalidateMounted(plan, target, volumes.Values);
+                throw;
+            }
+
+            sources.Release(completed: true);
+            state.TargetComplete = true;
+        }
 
         foreach (var placement in plan.Layout.Placements.Where(p => p.Grows))
         {
@@ -629,15 +708,19 @@ internal sealed class CloneExecutor
         }
 
         var windows = finisher.FindWindowsVolume(volumes.Values);
+        var converting = plan.Layout.Style is not null;
         var mbrMoves = plan.SourceTable.Gpt is null && plan.Layout.Placements.Any(p => p.Moves);
-        if (windows is not null && (plan.NewIdentity is not null || mbrMoves))
+        if (windows is not null && (plan.NewIdentity is not null || mbrMoves || converting))
         {
             Report(progress, ClonePhase.Finishing, "Rehaciendo el arranque del clon");
-            var uefi = plan.SourceTable.Gpt is not null;
-            var systemPlacement = uefi
-                ? plan.Layout.Placements.FirstOrDefault(p => p.Partition.Kind == PartitionKind.EfiSystem)
-                : plan.Layout.Placements.FirstOrDefault(p => p.Partition.IsActive);
-            var system = systemPlacement is not null && volumes.TryGetValue(systemPlacement.TargetOffset, out var path) ? path : windows;
+            var uefi = plan.TargetStyle == PartitionStyle.Gpt;
+
+            // UEFI arranca de la partición EFI (la del origen o la nueva); BIOS, de la activa, que
+            // al convertir a MBR es la de Windows.
+            long? systemOffset = uefi
+                ? plan.Layout.Placements.FirstOrDefault(p => p.Partition.Kind == PartitionKind.EfiSystem)?.TargetOffset ?? createdEfi?.Offset
+                : plan.Layout.Placements.FirstOrDefault(p => converting ? p.Partition.ContainsWindows : p.Partition.IsActive)?.TargetOffset;
+            var system = systemOffset is { } offset && volumes.TryGetValue(offset, out var path) ? path : windows;
             var map = MountedDevices.Map(head, plan.SourceTable, plan.Layout, plan.NewIdentity, sectorSize);
             finisher.RepairBoot(new BootRepair(windows, system, uefi, map));
             CloneLog.BootRepaired(_log, map.Count);
@@ -657,7 +740,7 @@ internal sealed class CloneExecutor
                 }
 
                 // Solo cambian los bytes de la tabla; el resto del primer MiB ya tiene sus datos.
-                var tableBytes = PartitionTable.TableBytes(plan.SourceTable, sectorSize);
+                var tableBytes = TableBuilder.TableBytes(plan.SourceTable, plan.Layout, sectorSize);
                 var current = ReadBytes(target, 0, PartitionTable.HeadBytes);
                 final.Head.AsSpan(0, tableBytes).CopyTo(current);
                 WriteChecked(target, 0, current);
@@ -666,6 +749,77 @@ internal sealed class CloneExecutor
 
             target.RefreshLayout();
             CloneLog.FinalIdentity(_log);
+        }
+    }
+
+    /// <summary>
+    /// Particiones reducidas (RF-14): formatea cada una y copia en ella los archivos de su volumen,
+    /// leídos de la instantánea. Mientras dura, el volumen se llama «ClonDisk incompleto».
+    /// </summary>
+    private void CopyFileSteps(
+        ClonePlan plan,
+        IReadOnlyDictionary<long, string> volumes,
+        VolumeSources sources,
+        RunState state,
+        ProgressMeter meter,
+        IProgress<CloneProgress>? progress,
+        CancellationToken cancellation)
+    {
+        var finisher = _access.Finisher;
+        foreach (var step in plan.FileSteps)
+        {
+            var partition = step.Partition!;
+            var name = DescribePartition(partition);
+            var targetVolume = volumes[step.Offset];
+            Report(progress, ClonePhase.Copying, $"Formateando {name} en el destino");
+            finisher.FormatVolume(targetVolume, IncompleteLabel);
+            CloneLog.VolumeFormatted(_log, name, step.Length);
+
+            var sourceRoot = step.FromSnapshot ? sources.Snapshots!.RootFor(partition.Volume!.Path) : partition.Volume!.Path;
+            var exclusions = plan.SourceIsSystemDisk ? CopyExclusions.ForVolume(partition.DriveLetter) : CopyExclusions.Default();
+            long reported = 0;
+            var result = finisher.CopyFiles(sourceRoot, targetVolume, exclusions, (bytes, path) =>
+            {
+                meter.Advance(bytes - reported);
+                reported = bytes;
+                if (meter.ShouldReport())
+                {
+                    progress?.Report(meter.Snapshot(ClonePhase.Copying, $"{name}: {path}"));
+                }
+            }, cancellation);
+
+            // Lo estimado era lo usado del volumen; se ajusta a lo que de verdad se copió.
+            meter.Advance(Math.Max(0, step.ExpectedBytes - reported));
+            state.BytesWritten += result.Bytes;
+            state.FileErrors += result.Errors.Count;
+            CloneLog.FilesCopied(_log, name, result.Files, result.Directories, result.HardLinks, result.Bytes, result.Skipped, result.Errors.Count);
+            foreach (var error in result.Errors)
+            {
+                CloneLog.FileNotCopied(_log, error);
+            }
+
+            finisher.SetVolumeLabel(targetVolume, partition.Volume.Label ?? string.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Si la copia por archivos falla o se cancela, el destino se deja sin tabla. Antes hay que
+    /// desmontar los volúmenes del clon (y esperar por volsnap) para poder escribir en ellos.
+    /// </summary>
+    private void InvalidateMounted(ClonePlan plan, IBlockDevice target, IEnumerable<string> volumes)
+    {
+        try
+        {
+            _access.Finisher.WaitBeforeRemovingVolumes();
+            var refs = volumes.Select(v => new VolumeRef(v, "del clon")).ToList();
+            using (_access.LockVolumes(refs, dismount: true))
+            {
+                Invalidate(plan, target);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or CloneException or UnauthorizedAccessException)
+        {
+            CloneLog.InvalidateFailed(_log, ex);
         }
     }
 
@@ -815,6 +969,7 @@ internal sealed class CloneExecutor
         public bool Verified { get; set; }
         public long BytesWritten { get; set; }
         public string? DataHash { get; set; }
+        public int FileErrors { get; set; }
     }
 
     private readonly record struct Chunk(AlignedBuffer Buffer, int Length, long Offset, bool IsClear, string Item);
@@ -831,7 +986,8 @@ internal sealed class CloneExecutor
         public ISnapshotSet? Snapshots { get; set; }
         public Dictionary<PartitionInfo, IVolumeSource> ByPartition { get; } = [];
 
-        public void Release(bool completed)
+        /// <summary>Cierra los volúmenes abiertos y conserva las instantáneas.</summary>
+        public void ReleaseDevices()
         {
             foreach (var volume in ByPartition.Values)
             {
@@ -839,6 +995,11 @@ internal sealed class CloneExecutor
             }
 
             ByPartition.Clear();
+        }
+
+        public void Release(bool completed)
+        {
+            ReleaseDevices();
             if (Snapshots is not null)
             {
                 if (completed)

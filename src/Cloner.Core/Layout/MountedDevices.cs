@@ -14,7 +14,10 @@ internal static class MountedDevices
 {
     private static ReadOnlySpan<byte> GptPrefix => "DMIO:ID:"u8;
 
-    /// <summary>Pares (identidad en el origen, identidad en el clon) de las particiones que cambian.</summary>
+    /// <summary>
+    /// Pares (identidad en el origen, identidad en el clon) de las particiones que cambian. Con
+    /// conversión (RF-17), la identidad del clon tiene la forma del estilo nuevo.
+    /// </summary>
     public static List<(byte[] Old, byte[] New)> Map(
         ReadOnlySpan<byte> sourceHead,
         PartitionTableInfo table,
@@ -26,45 +29,81 @@ internal static class MountedDevices
         ArgumentNullException.ThrowIfNull(layout);
 
         var map = new List<(byte[], byte[])>();
-        if (table.Gpt is { } gpt)
+        if (table.Style == PartitionStyle.Raw)
         {
-            var entries = sourceHead.Slice((int)(gpt.PartitionEntryLba * sectorSize), gpt.EntriesSectors * sectorSize);
-            for (var i = 0; i < gpt.EntryCount; i++)
+            return map;
+        }
+
+        var sourceGuids = SourceGuids(sourceHead, table, sectorSize);
+        var signature = BinaryPrimitives.ReadUInt32LittleEndian(sourceHead[440..]);
+        var targetGpt = (layout.Style ?? table.Style) == PartitionStyle.Gpt;
+        foreach (var placement in layout.Placements)
+        {
+            var offset = placement.Partition.OffsetBytes;
+            byte[] oldValue;
+            if (table.Gpt is not null)
             {
-                var entry = entries.Slice(i * (int)gpt.EntrySize, (int)gpt.EntrySize);
-                if (entry[..16].IndexOfAnyExcept((byte)0) < 0)
+                if (!sourceGuids.TryGetValue(offset, out var oldGuid))
                 {
                     continue;
                 }
 
-                var offset = BinaryPrimitives.ReadInt64LittleEndian(entry[32..]) * sectorSize;
-                var oldGuid = new Guid(entry.Slice(16, 16));
-                var newGuid = identity is not null && identity.PartitionGuids.TryGetValue(offset, out var replaced) ? replaced : oldGuid;
-                if (newGuid != oldGuid)
-                {
-                    map.Add((GptValue(oldGuid), GptValue(newGuid)));
-                }
+                oldValue = GptValue(oldGuid);
+            }
+            else
+            {
+                oldValue = MbrValue(signature, offset);
             }
 
-            return map;
-        }
-
-        if (table.Style == PartitionStyle.Mbr)
-        {
-            var signature = BinaryPrimitives.ReadUInt32LittleEndian(sourceHead[440..]);
-            var newSignature = identity?.MbrSignature ?? signature;
-            foreach (var placement in layout.Placements)
+            byte[] newValue;
+            if (targetGpt)
             {
-                var oldValue = MbrValue(signature, placement.Partition.OffsetBytes);
-                var newValue = MbrValue(newSignature, placement.TargetOffset);
-                if (!oldValue.AsSpan().SequenceEqual(newValue))
+                var newGuid = identity is not null && identity.PartitionGuids.TryGetValue(offset, out var replaced)
+                    ? replaced
+                    : sourceGuids.GetValueOrDefault(offset);
+                if (newGuid == Guid.Empty)
                 {
-                    map.Add((oldValue, newValue));
+                    continue;
                 }
+
+                newValue = GptValue(newGuid);
+            }
+            else
+            {
+                newValue = MbrValue(identity?.MbrSignature ?? signature, placement.TargetOffset);
+            }
+
+            if (!oldValue.AsSpan().SequenceEqual(newValue))
+            {
+                map.Add((oldValue, newValue));
             }
         }
 
         return map;
+    }
+
+    /// <summary>GUID único de cada partición de un origen GPT, por su desplazamiento.</summary>
+    private static Dictionary<long, Guid> SourceGuids(ReadOnlySpan<byte> sourceHead, PartitionTableInfo table, int sectorSize)
+    {
+        var guids = new Dictionary<long, Guid>();
+        if (table.Gpt is not { } gpt)
+        {
+            return guids;
+        }
+
+        var entries = sourceHead.Slice((int)(gpt.PartitionEntryLba * sectorSize), gpt.EntriesSectors * sectorSize);
+        for (var i = 0; i < gpt.EntryCount; i++)
+        {
+            var entry = entries.Slice(i * (int)gpt.EntrySize, (int)gpt.EntrySize);
+            if (entry[..16].IndexOfAnyExcept((byte)0) < 0)
+            {
+                continue;
+            }
+
+            guids[BinaryPrimitives.ReadInt64LittleEndian(entry[32..]) * sectorSize] = new Guid(entry.Slice(16, 16));
+        }
+
+        return guids;
     }
 
     /// <summary>Sustituye en una lista de valores los que identifican particiones del origen.</summary>

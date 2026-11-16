@@ -33,6 +33,12 @@ public sealed record PartitionPlacement(PartitionInfo Partition, long TargetOffs
 
     public bool Grows => TargetSize > Partition.SizeBytes;
 
+    /// <summary>
+    /// La partición se reduce para caber en un destino más pequeño (RF-14): se formatea de nuevo
+    /// y su contenido se copia archivo a archivo.
+    /// </summary>
+    public bool Shrinks => TargetSize < Partition.SizeBytes;
+
     public long Growth => TargetSize - Partition.SizeBytes;
 }
 
@@ -44,8 +50,17 @@ public sealed record TargetLayout
     /// <summary>Se alinearon las particiones a 1 MiB.</summary>
     public bool Aligned { get; init; }
 
+    /// <summary>El destino es más pequeño que el origen y la distribución se ajustó a él (RF-14).</summary>
+    public bool FitsSmallerTarget { get; init; }
+
+    /// <summary>Estilo de la tabla del destino si se convierte (RF-17); nulo si es el del origen.</summary>
+    public PartitionStyle? Style { get; init; }
+
+    /// <summary>Particiones que no están en el origen y se crean en el destino.</summary>
+    public IReadOnlyList<CreatedPartition> Created { get; init; } = [];
+
     /// <summary>Alguna partición cambia de posición o de tamaño respecto al origen.</summary>
-    public bool Changes => Placements.Any(p => p.Moves || p.Grows);
+    public bool Changes => FitsSmallerTarget || Style is not null || Created.Count > 0 || Placements.Any(p => p.Moves || p.Grows || p.Shrinks);
 
     public PartitionPlacement? Find(PartitionInfo partition) => Placements.FirstOrDefault(p => p.Partition == partition);
 

@@ -61,6 +61,9 @@ void WriteHelp(TextWriter output)
     output.WriteLine("      --align / --no-align    Alinea las particiones a 1 MiB siempre / nunca (por defecto,");
     output.WriteLine("                              solo si el destino es un SSD).");
     output.WriteLine("      --new-ids               Da identificadores nuevos al clon para usarlo junto al original.");
+    output.WriteLine("      --gpt / --mbr           Convierte la tabla del clon a GPT (arranque UEFI) o a MBR (BIOS).");
+    output.WriteLine("                              Si el destino es más pequeño, las particiones NTFS de datos se");
+    output.WriteLine("                              reducen y se copian archivo a archivo, si sus datos caben.");
     output.WriteLine("      --no-verify             No relee el destino para compararlo al terminar.");
     output.WriteLine("      --virtual-only          Solo admite destinos virtuales (VHD/VHDX), para pruebas.");
     output.WriteLine("  version                     Muestra la versión.");

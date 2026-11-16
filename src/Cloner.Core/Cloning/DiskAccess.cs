@@ -47,6 +47,9 @@ internal interface ISnapshotSet : IDisposable
 {
     IVolumeSource Open(string volumePath);
 
+    /// <summary>Raíz de la instantánea de un volumen para leer sus archivos, con «\» final.</summary>
+    string RootFor(string volumePath);
+
     /// <summary>Indica que la copia terminó bien.</summary>
     void Complete();
 }
@@ -94,6 +97,8 @@ internal sealed class Win32DiskAccess(bool virtualTargetOnly, IDiskInventory inv
     {
         public IVolumeSource Open(string volumePath) =>
             new Win32VolumeSource(DiskDevice.OpenVolume(snapshots.DeviceFor(volumePath), sectorSize));
+
+        public string RootFor(string volumePath) => snapshots.DeviceFor(volumePath) + "\\";
 
         public void Complete() => snapshots.Complete();
 

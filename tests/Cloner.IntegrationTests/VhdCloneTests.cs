@@ -205,6 +205,77 @@ public sealed class VhdCloneTests : IDisposable
     }
 
     [AdminFact]
+    public async Task SmallerVhdCloneShrinksAndKeepsFilesStreamsAndLinks()
+    {
+        var source = NewDisk("origen.vhd", 128, label: "ORIGEN");
+        var target = NewDisk("destino.vhd", 64);
+        var expected = WriteSampleFile(source);
+        var sourceInfo = source.Info();
+        var root = sourceInfo.Partitions.Single(p => p.Volume?.Label == "ORIGEN").Volume!.Path;
+        Directory.CreateDirectory(Path.Combine(root, "Carpeta", "Sub"));
+        File.WriteAllText(Path.Combine(root, "Carpeta", "nota.txt"), "principal");
+        File.WriteAllText(Path.Combine(root, "Carpeta", "nota.txt:oculto"), "alternativo");
+        Assert.True(Windows.Win32.PInvoke.CreateHardLink(Path.Combine(root, "Carpeta", "Sub", "enlace.bin"), Path.Combine(root, "muestra.bin")));
+
+        var (plan, result) = await Clone(source, target);
+
+        Assert.True(result.Outcome == CloneOutcome.Succeeded, result.Message);
+        var files = Assert.Single(plan.FileSteps);
+        Assert.True(files.FromSnapshot);
+        Assert.True(Assert.Single(plan.Layout.Placements, p => p.Shrinks).TargetEnd <= 64L * 1024 * 1024);
+
+        source.Detach();
+        target.Detach();
+        target.Attach();
+        var clone = target.Info();
+
+        // Conserva el identificador del disco; el volumen tiene su etiqueta y su contenido.
+        Assert.Equal(sourceInfo.Identifier, clone.Identifier);
+        var volume = clone.Partitions.Single(p => p.Volume?.Label == "ORIGEN").Volume!;
+        Assert.Equal("NTFS", volume.FileSystem);
+        Assert.Equal(expected, File.ReadAllBytes(Path.Combine(volume.Path, "muestra.bin")));
+        Assert.Equal("principal", File.ReadAllText(Path.Combine(volume.Path, "Carpeta", "nota.txt")));
+        Assert.Equal("alternativo", File.ReadAllText(Path.Combine(volume.Path, "Carpeta", "nota.txt:oculto")));
+
+        // El enlace duro sigue siendo el mismo archivo.
+        File.AppendAllText(Path.Combine(volume.Path, "muestra.bin"), "x");
+        Assert.Equal(expected.Length + 1, new FileInfo(Path.Combine(volume.Path, "Carpeta", "Sub", "enlace.bin")).Length);
+    }
+
+    [AdminFact]
+    public async Task VhdIsConvertedToMbrAndBackToGpt()
+    {
+        var source = NewDisk("origen.vhd", 64, label: "ORIGEN");
+        var mbr = NewDisk("mbr.vhd", 64);
+        var gpt = NewDisk("gpt.vhd", 64);
+        var expected = WriteSampleFile(source);
+
+        var (toMbr, first) = await Clone(source, mbr, new CloneOptions { TargetStyle = PartitionStyle.Mbr });
+        Assert.True(first.Outcome == CloneOutcome.Succeeded, first.Message);
+        Assert.Equal(PartitionStyle.Mbr, toMbr.TargetStyle);
+
+        var mbrInfo = mbr.Info();
+        Assert.Equal(PartitionStyle.Mbr, mbrInfo.PartitionStyle);
+        Assert.False(mbrInfo.IsOffline);
+        var mbrVolume = mbrInfo.Partitions.Single(p => p.Volume?.Label == "ORIGEN").Volume!;
+        Assert.Equal(expected, File.ReadAllBytes(Path.Combine(mbrVolume.Path, "muestra.bin")));
+
+        var (toGpt, second) = await Clone(mbr, gpt, new CloneOptions { TargetStyle = PartitionStyle.Gpt });
+        Assert.True(second.Outcome == CloneOutcome.Succeeded, second.Message);
+        Assert.Equal(PartitionStyle.Gpt, toGpt.TargetStyle);
+
+        var gptInfo = gpt.Info();
+        Assert.Equal(PartitionStyle.Gpt, gptInfo.PartitionStyle);
+        var gptPartition = gptInfo.Partitions.Single(p => p.Volume?.Label == "ORIGEN");
+        Assert.Equal(PartitionKind.BasicData, gptPartition.Kind);
+        Assert.Equal(expected, File.ReadAllBytes(Path.Combine(gptPartition.Volume!.Path, "muestra.bin")));
+
+        // El MBR intermedio lleva el código de arranque de ClonDisk.
+        mbr.Detach();
+        Assert.True(mbr.ReadData().AsSpan(0, 440).SequenceEqual(MbrBootCode.Create()), "El MBR del clon no tiene el código de arranque.");
+    }
+
+    [AdminFact]
     public void PhysicalDisksAreRejectedInVirtualOnlyMode()
     {
         var source = NewDisk("origen.vhd", 64, label: "ORIGEN");
