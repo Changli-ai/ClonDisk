@@ -150,7 +150,7 @@ dotnet publish src/Cloner.Cli -c Release -r win-x64 --self-contained -p:PublishS
 Las pruebas de integración (`tests/Cloner.IntegrationTests`) crean y clonan discos virtuales VHD,
 así que necesitan una consola de administrador; sin ella se omiten.
 
-## Cómo está hecho
+## ¿Cómo está hecho?
 
 - **C# sobre .NET 10**, interfaz **WPF** (MVVM con CommunityToolkit.Mvvm) y llamadas a Windows con
   CsWin32.
