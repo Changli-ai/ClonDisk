@@ -218,6 +218,9 @@ está hecho.
   directos del menú Inicio (y, opcionalmente, del escritorio) y registra el desinstalador en
   «Aplicaciones instaladas».
 - RP-04 El instalador y los ejecutables van firmados con un certificado de firma de código.
+- **Publicación (17/11/2026):** repositorio público https://github.com/Changli-ai/ClonDisk, con
+  licencia **GPL-3.0** (`LICENSE`) y `README.md` en español. ClonDisk es gratis, sin anuncios,
+  sin telemetría y de código abierto: el README lo dice y debe mantenerse al día con cada etapa.
 - RP-05 Se comprueba en un Windows 10 y un Windows 11 limpios, sin .NET ni herramientas de
   desarrollo: instalar, abrir, clonar entre VHD y desinstalar sin dejar restos.
 
