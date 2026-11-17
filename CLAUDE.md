@@ -221,6 +221,10 @@ está hecho.
 - **Publicación (17/11/2026):** repositorio público https://github.com/Changli-ai/ClonDisk, con
   licencia **GPL-3.0** (`LICENSE`) y `README.md` en español. ClonDisk es gratis, sin anuncios,
   sin telemetría y de código abierto: el README lo dice y debe mantenerse al día con cada etapa.
+  Release v0.1.0 con el .zip (publicación autocontenida). Web en GitHub Pages desde `docs/`
+  (https://changli-ai.github.io/ClonDisk/, `index.html` con datos estructurados, `robots.txt`,
+  `sitemap.xml`); las capturas salen del proyecto de dibujo a PNG de la interfaz. Al publicar una
+  versión nueva: Release con el .zip y actualizar versión y fecha en la web y en `sitemap.xml`.
 - RP-05 Se comprueba en un Windows 10 y un Windows 11 limpios, sin .NET ni herramientas de
   desarrollo: instalar, abrir, clonar entre VHD y desinstalar sin dejar restos.
 
