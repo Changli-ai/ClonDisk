@@ -44,5 +44,12 @@ internal interface ITargetFinisher
     /// Espera antes de que desaparezcan los volúmenes del clon: quitarlos justo después de
     /// montarlos puede bloquear el equipo por una carrera de volsnap (incidente del 14/11/2026).
     /// </summary>
-    void WaitBeforeRemovingVolumes();
+    /// <param name="secondsLeft">Recibe cada segundo lo que falta, para mostrarlo.</param>
+    void WaitBeforeRemovingVolumes(Action<int>? secondsLeft = null);
+
+    /// <summary>
+    /// Quita las letras de unidad que Windows haya dado a los volúmenes del clon mientras se
+    /// prepara, para que el Explorador no los abra ni ofrezca formatearlos. No falla si no puede.
+    /// </summary>
+    void RemoveDriveLetters(IEnumerable<string> volumePaths);
 }

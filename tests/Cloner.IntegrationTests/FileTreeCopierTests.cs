@@ -67,6 +67,31 @@ public sealed class FileTreeCopierTests : IDisposable
     }
 
     [Fact]
+    public void ManyNamesOfTheSameFileStayOneFileWhenCopiedInParallel()
+    {
+        var original = Path.Combine(_source, "original.bin");
+        File.WriteAllBytes(original, new byte[100_000]);
+        for (var i = 0; i < 6; i++)
+        {
+            var directory = Directory.CreateDirectory(Path.Combine(_source, $"c{i}"));
+            RunCmd($"mklink /H \"{Path.Combine(directory.FullName, "enlace.bin")}\" \"{original}\"");
+            for (var f = 0; f < 50; f++)
+            {
+                File.WriteAllText(Path.Combine(directory.FullName, $"relleno{f}.txt"), "x");
+            }
+        }
+
+        var result = new FileTreeCopier(CopyExclusions.Default(), withSecurity: false, progress: null, CancellationToken.None, workers: 8).Copy(_source, _target);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(6, result.HardLinks);
+        Assert.Equal(1 + 300, result.Files);
+        File.AppendAllText(Path.Combine(_target, "c3", "enlace.bin"), "x");
+        Assert.Equal(100_001, new FileInfo(Path.Combine(_target, "original.bin")).Length);
+        Assert.Equal(100_001, new FileInfo(Path.Combine(_target, "c5", "enlace.bin")).Length);
+    }
+
+    [Fact]
     public void StopsWhenCancelled()
     {
         File.WriteAllText(Path.Combine(_source, "a.txt"), "a");

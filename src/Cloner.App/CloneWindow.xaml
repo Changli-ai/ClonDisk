@@ -77,7 +77,7 @@
 
         <StackPanel Margin="0,0,0,16">
             <TextBlock Text="Clonar un disco" FontSize="22" FontWeight="SemiBold" />
-            <TextBlock Text="Copia un disco completo a otro de igual o mayor capacidad, también el del sistema con Windows en marcha."
+            <TextBlock Text="Copia un disco completo a otro, también el del sistema con Windows en marcha. Si el destino es más pequeño, se ajustan las particiones siempre que los datos quepan."
                        Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap" />
         </StackPanel>
 
@@ -288,7 +288,16 @@
                         </Grid>
 
                         <TextBlock Text="En curso" Style="{StaticResource StatLabel}" Margin="0,16,0,0" />
-                        <TextBlock Text="{Binding CurrentItem}" Style="{StaticResource StatValue}" />
+                        <TextBlock Text="{Binding CurrentItem}" Style="{StaticResource StatValue}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#FFF7E6" BorderBrush="#F2C26B" BorderThickness="1" CornerRadius="8" Padding="16,12" Margin="0,12,0,0"
+                        Visibility="{Binding IsCancelling, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="Cancelando el clonado" FontWeight="SemiBold" />
+                        <TextBlock Text="ClonDisk está deteniendo la copia y dejando el destino sin tabla de particiones. Si el clon ya estaba montado, antes hay una pausa de seguridad de hasta 90 segundos, que verás en «En curso». No cierres la ventana ni desconectes los discos."
+                                   TextWrapping="Wrap" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>
 

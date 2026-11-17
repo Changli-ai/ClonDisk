@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Cloner.Core.Cloning;
 using Cloner.Core.Inventory;
 using Cloner.Core.Layout;
@@ -189,6 +190,65 @@ public class SmallerTargetTests
 
         Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
         Assert.Contains("no se pudieron copiar", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WhileFinishingTheCloneHasNoDriveLettersAndTheFinalTableKeepsTheSourceAttributes()
+    {
+        var setup = new ShrinkSetup();
+        var attributes = new List<ulong>();
+        var target = setup.Access.Disks[2];
+        target.AfterWrite = offset =>
+        {
+            if (offset == 0)
+            {
+                attributes.Add(BinaryPrimitives.ReadUInt64LittleEndian(setup.TargetImage.AsSpan((2 * Sector) + 48)));
+            }
+        };
+
+        var result = setup.Run();
+
+        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+
+        // Escrituras en el sector 0: borrado inicial, tabla provisional y tabla definitiva.
+        Assert.Contains(attributes, a => (a & TableBuilder.NoDriveLetterAttribute) != 0);
+        Assert.Equal(0UL, attributes[^1] & TableBuilder.NoDriveLetterAttribute);
+        Assert.Equal(BinaryPrimitives.ReadUInt64LittleEndian(setup.SourceImage.AsSpan((2 * Sector) + 48)), attributes[^1]);
+        Assert.NotEmpty(setup.Access.FakeFinisher.LettersRemoved);
+    }
+
+    [Fact]
+    public void ShrinkWithNewIdentifiersAlsoUsesAProvisionalTable()
+    {
+        var (source, table, image) = Source();
+        var targetImage = Garbage(44 * MiB);
+        var plan = ClonePlanner.Create(source, TestDisks.Info(2, targetImage), table, WithSnapshots, new CloneOptions { NewIdentifiers = true }).Plan!;
+        var access = new FakeDiskAccess();
+        access.Disks[1] = new MemoryDisk(image);
+        access.Disks[2] = new MemoryDisk(targetImage);
+        foreach (var partition in source.Partitions)
+        {
+            access.Volumes[partition.Volume!.Path] = (1, partition.OffsetBytes, partition.SizeBytes, null);
+        }
+
+        var result = new CloneExecutor(access, NullLogger.Instance).Execute(plan, null, CancellationToken.None);
+
+        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+        Assert.Equal(1, access.FakeFinisher.QuietWaits);
+        Assert.Equal(plan.NewIdentity!.DiskGuid!.Value.ToString(), TestDisks.Table(targetImage).Identifier, ignoreCase: true);
+        Assert.Equal(0UL, BinaryPrimitives.ReadUInt64LittleEndian(targetImage.AsSpan((2 * Sector) + 48)) & TableBuilder.NoDriveLetterAttribute);
+    }
+
+    [Fact]
+    public void LabelFailureDoesNotSpoilTheClone()
+    {
+        var setup = new ShrinkSetup();
+        setup.Access.FakeFinisher.LabelFailure = new CloneException("Acceso denegado");
+
+        var result = setup.Run();
+
+        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+        Assert.True(result.TargetComplete);
     }
 
     private static long RoundUpMiB(long value) => (value + MiB - 1) / MiB * MiB;

@@ -48,6 +48,12 @@ internal static partial class CloneLog
     [LoggerMessage(Level = LogLevel.Information, Message = "Copiados los archivos de {Partition}: {Files} archivos, {Directories} carpetas, {Links} enlaces duros, {Bytes} bytes; {Skipped} excluidos y {Errors} con error.")]
     public static partial void FilesCopied(ILogger logger, string partition, long files, long directories, long links, long bytes, long skipped, int errors);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No se pudo poner la etiqueta del origen al volumen del clon: {Reason}")]
+    public static partial void LabelFailed(ILogger logger, string reason);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Esperando a que Windows libere los volúmenes del clon antes de quitarlos.")]
+    public static partial void QuietWait(ILogger logger);
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "No copiado: {Error}")]
     public static partial void FileNotCopied(ILogger logger, string error);
 

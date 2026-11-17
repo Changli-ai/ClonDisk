@@ -62,7 +62,9 @@ internal sealed class CloneExecutor
             var targetSectors = plan.Target.SizeBytes / plan.Target.SectorSize;
             // Con particiones nuevas (la EFI de una conversión) también se copia con una tabla
             // provisional, en la que la EFI figura como de datos para poder formatearla.
-            var temporary = plan.NeedsFinishing && (plan.NewIdentity is null || plan.Layout.Created.Count > 0);
+            // Las particiones reducidas también: hasta formatearlas están vacías y, con letra de
+            // unidad, el Explorador ofrecería formatearlas.
+            var temporary = plan.NeedsFinishing && (plan.NewIdentity is null || plan.Layout.Created.Count > 0 || plan.FileSteps.Count > 0);
             var copyIdentity = plan.NewIdentity ?? (temporary ? TableIdentity.CreateNew(plan.SourceTable.Style, plan.SourcePartitions) : null);
             BuiltTable? built = null;
             CheckTargetTable(target, plan);
@@ -74,7 +76,7 @@ internal sealed class CloneExecutor
                 CloneLog.VolumesLocked(_log);
                 if (plan.RebuildsTable)
                 {
-                    built = TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, plan.Source.SectorSize, copyIdentity, provisional: plan.Layout.Created.Count > 0);
+                    built = TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, plan.Source.SectorSize, copyIdentity, provisional: temporary);
                 }
 
                 OpenVolumeSources(plan, volumes, progress);
@@ -663,7 +665,9 @@ internal sealed class CloneExecutor
         var sectorSize = plan.Source.SectorSize;
         var targetSectors = plan.Target.SizeBytes / plan.Target.SectorSize;
 
-        Report(progress, ClonePhase.Finishing, "Esperando a que Windows monte el clon");
+        void Say(string item) => progress?.Report(meter.Snapshot(ClonePhase.Finishing, item));
+
+        Say("Esperando a que Windows monte el clon");
         target.Flush();
         target.RefreshLayout();
         var createdEfi = plan.Layout.Created.FirstOrDefault(c => c.Kind == PartitionKind.EfiSystem);
@@ -675,10 +679,15 @@ internal sealed class CloneExecutor
 
         var volumes = finisher.WaitForVolumes(plan.Target.Number, offsets);
         CloneLog.CloneMounted(_log, volumes.Count);
+        if (temporary)
+        {
+            // En GPT la tabla provisional ya lo evita; en MBR se quitan en cuanto aparecen.
+            finisher.RemoveDriveLetters(volumes.Values);
+        }
 
         if (createdEfi is not null)
         {
-            Report(progress, ClonePhase.Finishing, "Formateando la partición EFI nueva");
+            Say("Formateando la partición EFI nueva");
             finisher.FormatVolume(volumes[createdEfi.Offset], "EFI", "FAT32");
             CloneLog.VolumeFormatted(_log, "Partición EFI nueva", createdEfi.Size);
         }
@@ -691,7 +700,7 @@ internal sealed class CloneExecutor
             }
             catch
             {
-                InvalidateMounted(plan, target, volumes.Values);
+                InvalidateMounted(plan, target, volumes.Values, meter, progress);
                 throw;
             }
 
@@ -702,7 +711,7 @@ internal sealed class CloneExecutor
         foreach (var placement in plan.Layout.Placements.Where(p => p.Grows))
         {
             var name = DescribePartition(placement.Partition);
-            Report(progress, ClonePhase.Finishing, $"Ampliando {name}");
+            Say($"Ampliando {name}");
             finisher.ExtendVolume(volumes[placement.TargetOffset], placement.TargetSize, sectorSize);
             CloneLog.VolumeExtended(_log, name, placement.TargetSize);
         }
@@ -712,7 +721,7 @@ internal sealed class CloneExecutor
         var mbrMoves = plan.SourceTable.Gpt is null && plan.Layout.Placements.Any(p => p.Moves);
         if (windows is not null && (plan.NewIdentity is not null || mbrMoves || converting))
         {
-            Report(progress, ClonePhase.Finishing, "Rehaciendo el arranque del clon");
+            Say("Rehaciendo el arranque del clon");
             var uefi = plan.TargetStyle == PartitionStyle.Gpt;
 
             // UEFI arranca de la partición EFI (la del origen o la nueva); BIOS, de la activa, que
@@ -728,8 +737,8 @@ internal sealed class CloneExecutor
 
         if (temporary)
         {
-            Report(progress, ClonePhase.Finishing, "Poniendo los identificadores definitivos");
-            finisher.WaitBeforeRemovingVolumes();
+            WaitQuietly(meter, progress, "antes de poner los identificadores definitivos");
+            Say("Poniendo los identificadores definitivos");
             var refs = volumes.Values.Select(v => new VolumeRef(v, "del clon")).ToList();
             using (_access.LockVolumes(refs, dismount: true))
             {
@@ -771,7 +780,7 @@ internal sealed class CloneExecutor
             var partition = step.Partition!;
             var name = DescribePartition(partition);
             var targetVolume = volumes[step.Offset];
-            Report(progress, ClonePhase.Copying, $"Formateando {name} en el destino");
+            progress?.Report(meter.Snapshot(ClonePhase.Copying, $"Formateando {name} en el destino"));
             finisher.FormatVolume(targetVolume, IncompleteLabel);
             CloneLog.VolumeFormatted(_log, name, step.Length);
 
@@ -798,7 +807,15 @@ internal sealed class CloneExecutor
                 CloneLog.FileNotCopied(_log, error);
             }
 
-            finisher.SetVolumeLabel(targetVolume, partition.Volume.Label ?? string.Empty);
+            // Sin la etiqueta el clon sigue siendo válido: un fallo aquí solo se anota.
+            try
+            {
+                finisher.SetVolumeLabel(targetVolume, partition.Volume.Label ?? string.Empty);
+            }
+            catch (CloneException ex)
+            {
+                CloneLog.LabelFailed(_log, ex.Message);
+            }
         }
     }
 
@@ -806,11 +823,11 @@ internal sealed class CloneExecutor
     /// Si la copia por archivos falla o se cancela, el destino se deja sin tabla. Antes hay que
     /// desmontar los volúmenes del clon (y esperar por volsnap) para poder escribir en ellos.
     /// </summary>
-    private void InvalidateMounted(ClonePlan plan, IBlockDevice target, IEnumerable<string> volumes)
+    private void InvalidateMounted(ClonePlan plan, IBlockDevice target, IEnumerable<string> volumes, ProgressMeter meter, IProgress<CloneProgress>? progress)
     {
         try
         {
-            _access.Finisher.WaitBeforeRemovingVolumes();
+            WaitQuietly(meter, progress, "antes de dejar el destino sin tabla");
             var refs = volumes.Select(v => new VolumeRef(v, "del clon")).ToList();
             using (_access.LockVolumes(refs, dismount: true))
             {
@@ -821,6 +838,17 @@ internal sealed class CloneExecutor
         {
             CloneLog.InvalidateFailed(_log, ex);
         }
+    }
+
+    /// <summary>
+    /// Pausa de seguridad antes de desmontar los volúmenes del clon (incidente de volsnap del
+    /// 14/11/2026). No se puede saltar, ni al cancelar, así que se muestra la cuenta atrás.
+    /// </summary>
+    private void WaitQuietly(ProgressMeter meter, IProgress<CloneProgress>? progress, string purpose)
+    {
+        CloneLog.QuietWait(_log);
+        _access.Finisher.WaitBeforeRemovingVolumes(seconds =>
+            progress?.Report(meter.Snapshot(ClonePhase.Finishing, $"Pausa de seguridad {purpose}: {seconds} s")));
     }
 
     /// <summary>Escribe y relee para comprobar que el destino guarda exactamente esos bytes.</summary>

@@ -359,7 +359,17 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
     enlace), enlaces duros por identificador de archivo, nombres cortos, atributos y fechas
     (las de las carpetas al final). Excluye lo de `CopyExclusions` (paginación, hibernación,
     `System Volume Information` y, si el origen es el disco del sistema, `FilesNotToBackup`).
-    Los archivos EFS no se copian; los comprimidos con WOF salen descomprimidos.
+    Los archivos EFS no se copian; los comprimidos con WOF salen descomprimidos. Un hilo recorre
+    y crea las carpetas y 8 copian archivos a la vez (con archivos pequeños el tiempo se va en
+    abrir y crear, no en transferir): ×2 medido en el SSD (`FileCopyBenchmark`, con
+    `CLONDISK_BENCH=1`). Si el volumen de origen o destino desaparece, se detiene en vez de
+    acumular errores. Un fallo al poner la etiqueta solo se anota.
+  - Mientras se termina el clon, la tabla provisional marca todas las particiones GPT «sin letra de
+    unidad» (en MBR se quitan las letras al aparecer): así Windows no ofrece formatear la partición
+    aún vacía, que fue lo que estropeó la primera prueba real (17/11/2026). La pausa de seguridad
+    de 90 s se muestra con cuenta atrás, también al cancelar.
+  - Prueba real del 17/11/2026 (disco 0 a un HDD USB de 931 GB): con la versión sin paralelismo,
+    la copia de C: iba a ~0,6 MB/s con archivos pequeños; pendiente de medir con la nueva.
   - Conversión (`StyleConversion`, `CloneOptions.TargetStyle`): siempre con identificadores
     nuevos y particiones alineadas a 1 MiB. A MBR: como mucho 4 particiones, se descarta la MSR,
     el código de arranque es propio (`PartitionTables/MbrBootCode`: busca la partición activa, lee
@@ -439,6 +449,13 @@ el `MainViewModel`; se ve al menos 1,5 s y después abre `MainWindow` con los da
 - **Imagen a archivo (VHDX).** No está en el alcance; valorar si se añade como alternativa al
   clon disco a disco para copias de seguridad.
 - Pendiente: herramienta del instalador y certificado de firma de código (etapa 10).
+- **Pendiente, pedido por el usuario (17/11/2026): reanudar un clonado cancelado o interrumpido.**
+  Hoy, al cancelar, el destino se queda sin tabla y el siguiente clonado empieza desde cero, aunque
+  la copia archivo a archivo de C: lleve horas (en la prueba real, ~20 MB/s a un HDD por USB 2.0).
+  Idea: conservar la partición reducida a medias (marcada «ClonDisk incompleto») y, al repetir el
+  clonado con el mismo origen y destino, saltarse los archivos que ya coincidan en tamaño y fechas;
+  rehacer siempre la parte por bloques, la tabla y el remate. Hay que decidir cómo se identifica un
+  destino reanudable sin debilitar RS-05 (que un clon incompleto no parezca válido).
 
 ## Comandos
 

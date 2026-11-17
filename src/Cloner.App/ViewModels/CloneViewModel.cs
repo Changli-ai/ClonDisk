@@ -359,13 +359,14 @@ public sealed partial class CloneViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanCancel))]
     private void Cancel()
     {
-        if (_cancellation is null || !_dialogs.ConfirmCancel())
+        if (_cancellation is null || IsCancelling || !_dialogs.ConfirmCancel())
         {
             return;
         }
 
         IsCancelling = true;
         PhaseText = "Cancelando…";
+        CurrentItem = "Deteniendo la copia";
         _cancellation.Cancel();
     }
 

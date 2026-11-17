@@ -39,3 +39,5 @@ SetFileShortName
 FILE_BASIC_INFO
 GetFileInformationByHandleEx
 SetVolumeLabel
+DeleteVolumeMountPoint
+GetVolumePathNamesForVolumeName

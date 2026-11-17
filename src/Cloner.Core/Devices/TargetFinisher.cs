@@ -69,9 +69,11 @@ internal sealed class TargetFinisher(IDiskInventory inventory) : ITargetFinisher
 
     public void SetVolumeLabel(string volumePath, string label)
     {
-        if (!PInvoke.SetVolumeLabel(WithSeparator(volumePath), label))
+        // Sin etiqueta se pasa nulo: una cadena vacía no la borra en todos los casos.
+        if (!PInvoke.SetVolumeLabel(WithSeparator(volumePath), string.IsNullOrEmpty(label) ? null! : label))
         {
-            throw new CloneException($"No se pudo poner la etiqueta al volumen {volumePath}.", new Win32Exception(Marshal.GetLastPInvokeError()));
+            var error = new Win32Exception(Marshal.GetLastPInvokeError());
+            throw new CloneException($"No se pudo poner la etiqueta al volumen {volumePath}: {error.Message}", error);
         }
     }
 
@@ -121,7 +123,44 @@ internal sealed class TargetFinisher(IDiskInventory inventory) : ITargetFinisher
         }
     }
 
-    public void WaitBeforeRemovingVolumes() => Thread.Sleep(QuietPeriod);
+    public void WaitBeforeRemovingVolumes(Action<int>? secondsLeft = null)
+    {
+        var end = DateTime.UtcNow + QuietPeriod;
+        while (DateTime.UtcNow < end)
+        {
+            secondsLeft?.Invoke((int)Math.Ceiling((end - DateTime.UtcNow).TotalSeconds));
+            Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(1000, Math.Max(0, (end - DateTime.UtcNow).TotalMilliseconds))));
+        }
+    }
+
+    public void RemoveDriveLetters(IEnumerable<string> volumePaths)
+    {
+        ArgumentNullException.ThrowIfNull(volumePaths);
+        foreach (var volume in volumePaths)
+        {
+            foreach (var mountPoint in MountPoints(volume).Where(p => p.Length == 3 && p[1] == ':'))
+            {
+                // Sin la letra el volumen sigue accesible por su ruta \\?\Volume{GUID}\.
+                PInvoke.DeleteVolumeMountPoint(mountPoint);
+            }
+        }
+    }
+
+    /// <summary>Letras y carpetas donde está montado un volumen.</summary>
+    private static unsafe List<string> MountPoints(string volumePath)
+    {
+        var buffer = new char[1024];
+        uint length;
+        fixed (char* names = buffer)
+        {
+            if (!PInvoke.GetVolumePathNamesForVolumeName(WithSeparator(volumePath), names, (uint)buffer.Length, out length))
+            {
+                return [];
+            }
+        }
+
+        return new string(buffer, 0, (int)Math.Min(length, (uint)buffer.Length)).Split('\0', StringSplitOptions.RemoveEmptyEntries).ToList();
+    }
 
     private static void TranslateMountedDevices(string hivePath, IReadOnlyList<(byte[] Old, byte[] New)> map)
     {

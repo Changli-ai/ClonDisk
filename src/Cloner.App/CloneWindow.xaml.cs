@@ -47,8 +47,12 @@ public partial class CloneWindow : Window, ICloneDialogs
         ArgumentNullException.ThrowIfNull(e);
         if (ViewModel is { IsRunning: true } running)
         {
+            // Mientras se cancela no se vuelve a preguntar: basta con esperar a que termine.
             e.Cancel = true;
-            running.CancelCommand.Execute(null);
+            if (!running.IsCancelling)
+            {
+                running.CancelCommand.Execute(null);
+            }
         }
 
         base.OnClosing(e);

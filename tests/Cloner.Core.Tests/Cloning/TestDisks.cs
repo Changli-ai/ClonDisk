@@ -366,7 +366,15 @@ internal sealed class FakeFinisher : ITargetFinisher
 
     public void RepairBoot(BootRepair repair) => Repairs.Add(repair);
 
-    public void WaitBeforeRemovingVolumes() => QuietWaits++;
+    public void WaitBeforeRemovingVolumes(Action<int>? secondsLeft = null)
+    {
+        QuietWaits++;
+        secondsLeft?.Invoke(90);
+    }
+
+    public List<string> LettersRemoved { get; } = [];
+
+    public void RemoveDriveLetters(IEnumerable<string> volumePaths) => LettersRemoved.AddRange(volumePaths);
 
     public List<(string Volume, string Label)> Formatted { get; } = [];
     public List<(string Volume, string Label)> Labels { get; } = [];
@@ -385,7 +393,18 @@ internal sealed class FakeFinisher : ITargetFinisher
         FileSystems.Add(fileSystem);
     }
 
-    public void SetVolumeLabel(string volumePath, string label) => Labels.Add((volumePath, label));
+    /// <summary>Si no es nula, poner la etiqueta falla con esta excepción.</summary>
+    public Exception? LabelFailure { get; set; }
+
+    public void SetVolumeLabel(string volumePath, string label)
+    {
+        if (LabelFailure is not null)
+        {
+            throw LabelFailure;
+        }
+
+        Labels.Add((volumePath, label));
+    }
 
     public FileCopyResult CopyFiles(string sourceRoot, string targetRoot, CopyExclusions exclusions, Action<long, string>? progress, CancellationToken cancellation)
     {

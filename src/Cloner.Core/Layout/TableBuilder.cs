@@ -60,8 +60,9 @@ internal static class TableBuilder
     private const int MbrEntrySize = 16;
 
     /// <param name="provisional">
-    /// Tabla para montar el clon antes de terminarlo: la partición EFI que se crea figura como de
-    /// datos, para que Windows la monte y se pueda formatear y llenar.
+    /// Tabla para montar el clon antes de terminarlo. En GPT, ninguna partición recibe letra de
+    /// unidad (así Windows no ofrece formatear las que aún están vacías) y la partición EFI que se
+    /// crea figura como de datos, para que Windows la monte y se pueda formatear y llenar.
     /// </param>
     public static BuiltTable Build(
         ReadOnlySpan<byte> sourceHead,
@@ -78,7 +79,7 @@ internal static class TableBuilder
         if (layout.Style is { } style && style != table.Style)
         {
             return style == PartitionStyle.Gpt
-                ? BuildNewGpt(Entries(layout, identity, style, provisional), targetSectors, sectorSize, identity)
+                ? BuildNewGpt(Entries(layout, identity, style, provisional), targetSectors, sectorSize, identity, provisional)
                 : BuildNewMbr(Entries(layout, identity, style, provisional), sectorSize, identity);
         }
 
@@ -93,11 +94,14 @@ internal static class TableBuilder
         }
 
         return table.Gpt is { } gpt
-            ? BuildGpt(head, gpt, layout, targetSectors, sectorSize, identity)
+            ? BuildGpt(head, gpt, layout, targetSectors, sectorSize, identity, provisional)
             : BuildMbr(head, layout, sectorSize, identity);
     }
 
-    private static BuiltTable BuildGpt(byte[] head, GptHeader gpt, TargetLayout layout, long targetSectors, int sectorSize, TableIdentity? identity)
+    /// <summary>Atributo GPT de las particiones de datos: Windows no les asigna letra de unidad.</summary>
+    public const ulong NoDriveLetterAttribute = 0x8000000000000000;
+
+    private static BuiltTable BuildGpt(byte[] head, GptHeader gpt, TargetLayout layout, long targetSectors, int sectorSize, TableIdentity? identity, bool provisional)
     {
         var entriesStart = (int)(gpt.PartitionEntryLba * sectorSize);
         var entriesLength = gpt.EntriesSectors * sectorSize;
@@ -118,6 +122,11 @@ internal static class TableBuilder
             if (identity is not null && identity.PartitionGuids.TryGetValue(sourceOffset, out var unique))
             {
                 unique.TryWriteBytes(entry.Slice(16, 16));
+            }
+
+            if (provisional)
+            {
+                BinaryPrimitives.WriteUInt64LittleEndian(entry[48..], BinaryPrimitives.ReadUInt64LittleEndian(entry[48..]) | NoDriveLetterAttribute);
             }
         }
 
@@ -212,7 +221,7 @@ internal static class TableBuilder
     }
 
     /// <summary>Tabla GPT nueva: MBR protector, cabecera y 128 entradas al principio y su copia al final.</summary>
-    private static BuiltTable BuildNewGpt(List<NewEntry> entries, long targetSectors, int sectorSize, TableIdentity? identity)
+    private static BuiltTable BuildNewGpt(List<NewEntry> entries, long targetSectors, int sectorSize, TableIdentity? identity, bool provisional)
     {
         var head = new byte[PartitionTable.HeadBytes];
         var entriesSectors = StyleConversion.GptEntriesSectors(sectorSize);
@@ -225,7 +234,7 @@ internal static class TableBuilder
             entry.Unique.TryWriteBytes(slot[16..]);
             BinaryPrimitives.WriteInt64LittleEndian(slot[32..], entry.Offset / sectorSize);
             BinaryPrimitives.WriteInt64LittleEndian(slot[40..], ((entry.Offset + entry.Size) / sectorSize) - 1);
-            BinaryPrimitives.WriteUInt64LittleEndian(slot[48..], entry.Type.GptAttributes);
+            BinaryPrimitives.WriteUInt64LittleEndian(slot[48..], entry.Type.GptAttributes | (provisional ? NoDriveLetterAttribute : 0));
             var name = entry.Type.GptName.Length > 36 ? entry.Type.GptName[..36] : entry.Type.GptName;
             System.Text.Encoding.Unicode.GetBytes(name).CopyTo(slot[56..]);
         }
