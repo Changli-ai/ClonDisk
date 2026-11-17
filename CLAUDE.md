@@ -14,11 +14,17 @@ prueba manual del usuario. El 15/11/2026 el usuario empezó la etapa 5, con lo q
 aceptada; sus pruebas de arranque (etapas 3 y 4) siguen pendientes.
 
 **Etapa 5 en curso** (destino más pequeño, RF-14, y conversión MBR↔GPT, RF-17): implementada en
-el motor, la CLI (`--gpt`/`--mbr`) y la interfaz. Pasan 176 pruebas unitarias y las 21 de
+el motor, la CLI (`--gpt`/`--mbr`) y la interfaz. Pasan 179 pruebas unitarias y las de
 integración como administrador (incluidas reducir un VHD de 128 a 64 MB con flujos alternativos y
-enlaces duros, y convertir un VHD de GPT a MBR y de vuelta a GPT). Pendiente: la prueba manual de
-arranque (clon de Windows a un disco menor y clon convertido, también el código de arranque MBR
-propio), que hará el usuario. Limitación: al convertir a MBR solo se marca activa la partición del Windows en uso.
+enlaces duros, y convertir un VHD de GPT a MBR y de vuelta a GPT). El 17/11/2026 se probó en real
+(ver «Prueba real del 17/11/2026»): el flujo funciona, pero no se llegó a terminar un clonado
+completo. Pendiente: la prueba manual de arranque (clon de Windows a un disco menor y clon
+convertido, también el código de arranque MBR propio), que hará el usuario. Limitación: al
+convertir a MBR solo se marca activa la partición del Windows en uso.
+
+**Publicado el 17/11/2026** (ver «Producto y distribución» → «Publicación»): repositorio público
+en GitHub con licencia GPL-3.0, Release v0.1.0 con el .zip y web en
+https://changli-ai.github.io/ClonDisk/, ya verificada en Google Search Console.
 
 **Estado anterior:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
 sistema en caliente): instantáneas VSS, copia inteligente, planificador y ejecutor hechos. Pasan
@@ -218,13 +224,38 @@ está hecho.
   directos del menú Inicio (y, opcionalmente, del escritorio) y registra el desinstalador en
   «Aplicaciones instaladas».
 - RP-04 El instalador y los ejecutables van firmados con un certificado de firma de código.
-- **Publicación (17/11/2026):** repositorio público https://github.com/Changli-ai/ClonDisk, con
-  licencia **GPL-3.0** (`LICENSE`) y `README.md` en español. ClonDisk es gratis, sin anuncios,
-  sin telemetría y de código abierto: el README lo dice y debe mantenerse al día con cada etapa.
-  Release v0.1.0 con el .zip (publicación autocontenida). Web en GitHub Pages desde `docs/`
-  (https://changli-ai.github.io/ClonDisk/, `index.html` con datos estructurados, `robots.txt`,
-  `sitemap.xml`); las capturas salen del proyecto de dibujo a PNG de la interfaz. Al publicar una
-  versión nueva: Release con el .zip y actualizar versión y fecha en la web y en `sitemap.xml`.
+- **Publicación (17/11/2026).** ClonDisk es **gratis, sin anuncios, sin registro, sin telemetría
+  y de código abierto**; los textos públicos deben decirlo y mantenerse al día con cada etapa.
+  - **Repositorio:** público en https://github.com/Changli-ai/ClonDisk (cuenta `Changli-ai`),
+    rama `main` enlazada con `origin`. Licencia **GPL-3.0** (`LICENSE`, texto oficial; elegida
+    por el usuario frente a MIT y Apache). `README.md` en español: qué es, usos, características,
+    seguridad, requisitos, uso de la interfaz y de la CLI, compilación, hoja de ruta, limitaciones
+    y enlaces a la web y a la descarga. El usuario también edita el README desde GitHub: antes de
+    tocarlo, `git fetch` y fusionar. Temas del repositorio: `clonar-discos`, `clonacion-de-discos`,
+    `clonar-disco-duro`, `migrar-windows-a-ssd`, `disk-cloning`, `disk-clone`, `ssd`, `hdd`,
+    `windows`, `windows-11`, `csharp`, `dotnet`, `wpf`; página principal: la web.
+  - **Release v0.1.0** (https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.0), marcada como
+    la última: `ClonDisk-0.1.0-win-x64.zip` con `ClonDisk.exe`, `clondisk-cli.exe` y `LÉEME.txt`,
+    publicación autocontenida en un solo archivo y sin firmar; notas en español con la huella
+    SHA-256. Las descargas de la web apuntan a `releases/latest`.
+  - **Web** en GitHub Pages desde `docs/` (rama `main`): https://changli-ai.github.io/ClonDisk/.
+    Una sola página en español (`index.html`, CSS propio, modo oscuro, adaptable al móvil) pensada
+    para búsquedas como «clonar discos», «clonar disco duro a SSD» y «migrar Windows a SSD»: datos
+    estructurados `SoftwareApplication` y `FAQPage`, Open Graph, `robots.txt`, `sitemap.xml` y
+    `.nojekyll`. Imágenes en `docs/assets`: logotipo y favicon sacados de `ClonDisk.ico`, y
+    capturas del proyecto de dibujo a PNG de la interfaz (las del asistente, recortadas porque
+    salen con el título cortado).
+  - **Google Search Console:** propiedad `https://changli-ai.github.io/ClonDisk/` verificada con
+    la etiqueta `google-site-verification` de `docs/index.html` (no quitarla); sitemap enviado e
+    indexación solicitada el 17/11/2026. El sitemap salía «No se ha podido obtener», lo normal en
+    una propiedad recién creada. Pendiente: confirmar que la página queda indexada
+    (`site:changli-ai.github.io/ClonDisk`).
+  - **Herramientas:** GitHub CLI 2.104.0 instalado con winget en `C:\Program Files\GitHub CLI\gh.exe`
+    (no está en el PATH de las consolas de desarrollo; winget está en
+    `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`), con sesión iniciada como `Changli-ai`.
+  - **Al publicar una versión nueva:** subir `Version` en `Directory.Build.props`, publicar
+    autocontenido, crear la Release con el .zip y sus notas, y actualizar la versión y la fecha en
+    la web, en `sitemap.xml` y en el README.
 - RP-05 Se comprueba en un Windows 10 y un Windows 11 limpios, sin .NET ni herramientas de
   desarrollo: instalar, abrir, clonar entre VHD y desinstalar sin dejar restos.
 
@@ -375,8 +406,28 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
     unidad» (en MBR se quitan las letras al aparecer): así Windows no ofrece formatear la partición
     aún vacía, que fue lo que estropeó la primera prueba real (17/11/2026). La pausa de seguridad
     de 90 s se muestra con cuenta atrás, también al cancelar.
-  - Prueba real del 17/11/2026 (disco 0 a un HDD USB de 931 GB): con la versión sin paralelismo,
-    la copia de C: iba a ~0,6 MB/s con archivos pequeños; pendiente de medir con la nueva.
+  - **Prueba real del 17/11/2026** (disco 0, el SSD del sistema, a un HDD USB de 931 GB, con el
+    permiso del usuario; el destino es menor, así que C: se reduce y se copia archivo a archivo):
+    - Primer intento: Windows dio letra a la C: aún vacía del clon y el Explorador ofreció
+      formatearla; la copia se rompió («El dispositivo no está listo», acceso denegado) y falló al
+      poner la etiqueta. Se corrigió con la tabla provisional sin letras, la parada si el volumen
+      desaparece y la etiqueta como fallo no grave. Cancelar parecía colgar la ventana: era la
+      pausa de 90 s sin avisos (ahora con cuenta atrás).
+    - Con un solo hilo, la copia de C: iba a ~0,6 MB/s (estimación de unas 290 h). Con 8 hilos,
+      entre 12 y 42 MB/s según el tamaño de los archivos (media de ~20 MB/s, unas 4 h para 353 GB).
+      El usuario canceló a las 1 h 31 min (~30 %), sin ningún archivo con error; la cancelación
+      dejó el disco sin tabla, como debe.
+    - Límites medidos: el HDD estaba conectado a velocidad USB 2.0 (puerto `HS03` del
+      controlador xHCI, controlador `USBSTOR`, sin UASP), que topa en ~35–40 MB/s; y Windows
+      Defender usaba ~40 % de CPU analizando cada archivo nuevo. Al usuario se le explicó cómo
+      excluir el proceso `ClonDisk.exe` en Seguridad de Windows mientras dura el clonado (no lo
+      cambia la app ni el asistente). Con un SSD igual o mayor conectado por dentro o por USB 3.0
+      se usaría la copia por bloques, de minutos en lugar de horas.
+    - Al cancelar el clonado de la CLI con Ctrl+C dentro de un script de PowerShell lanzado con
+      `Start-Process -Verb RunAs`, se cerró toda la ventana y se mató el proceso a mitad de la
+      cancelación (las instantáneas quedaron hasta el reinicio y el disco con la tabla
+      provisional). Para clonados reales hay que lanzar la interfaz, o la CLI directamente en una
+      consola de administrador.
   - Conversión (`StyleConversion`, `CloneOptions.TargetStyle`): siempre con identificadores
     nuevos y particiones alineadas a 1 MiB. A MBR: como mucho 4 particiones, se descarta la MSR,
     el código de arranque es propio (`PartitionTables/MbrBootCode`: busca la partición activa, lee
