@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://changli-ai.github.io/ClonDisk/sitemap.xml
