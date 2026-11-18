@@ -14,7 +14,7 @@ prueba manual del usuario. El 15/11/2026 el usuario empezó la etapa 5, con lo q
 aceptada; sus pruebas de arranque (etapas 3 y 4) siguen pendientes.
 
 **Etapa 5 en curso** (destino más pequeño, RF-14, y conversión MBR↔GPT, RF-17): implementada en
-el motor, la CLI (`--gpt`/`--mbr`) y la interfaz. Pasan 179 pruebas unitarias y las de
+el motor, la CLI (`--gpt`/`--mbr`) y la interfaz. Pasan 188 pruebas unitarias y las de
 integración como administrador (incluidas reducir un VHD de 128 a 64 MB con flujos alternativos y
 enlaces duros, y convertir un VHD de GPT a MBR y de vuelta a GPT). El 17/11/2026 se probó en real
 (ver «Prueba real del 17/11/2026»): el flujo funciona, pero no se llegó a terminar un clonado
@@ -428,6 +428,25 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
       cancelación (las instantáneas quedaron hasta el reinicio y el disco con la tabla
       provisional). Para clonados reales hay que lanzar la interfaz, o la CLI directamente en una
       consola de administrador.
+  - **Prueba real del 18/11/2026** (otro equipo, Windows 10 con AVG AntiVirus; disco del sistema,
+    un WD de 250 GB GPT, a otro idéntico): 54,7 GB copiados en 17 min, pero la verificación falló
+    «a partir del byte 0». Todos los bloques coincidían salvo el primer MiB, con la tabla. Causa
+    probable: la tabla se escribía con los identificadores del disco del sistema en uso y, al
+    aparecer un disco duplicado, Windows (o la protección del MBR de AVG) la cambió; en las pruebas
+    del 17/11, con identificadores provisionales, la misma verificación pasaba.
+    Arreglo: si el clon conserva los identificadores del origen, la copia escribe siempre la tabla
+    con unos provisionales (`TableBuilder.ApplyIdentity` sobre la tabla copiada, o la tabla
+    reconstruida con ellos) y, después de verificar, `WriteFinalTable` pone el destino **sin
+    conexión** (`IOCTL_DISK_SET_DISK_ATTRIBUTES`, sin guardar: vuelve en línea al reiniciar o
+    reconectarlo) y escribe la tabla definitiva; si no se puede escribir sin conexión, la escribe en
+    línea y quita la conexión al acabar. A los 5 s relee la tabla y, si cambió, lo dice en el
+    resultado. El clon se deja sin conexión y no se pide a Windows que relea su tabla; el resultado
+    pide apagar antes de cambiar los discos. La huella de lo copiado se calcula con la tabla
+    definitiva. Diagnóstico (`VerifyDiagnosis`): si la verificación falla, se anotan todos los
+    bloques distintos y, del primer MiB, qué bytes cambiaron (código de arranque, firma o GUID del
+    disco, entradas GPT…) con una explicación: identificadores cambiados (Windows con discos
+    duplicados), principio vacío o código de arranque cambiado (antivirus). Pendiente: que el
+    usuario repita esa prueba.
   - Conversión (`StyleConversion`, `CloneOptions.TargetStyle`): siempre con identificadores
     nuevos y particiones alineadas a 1 MiB. A MBR: como mucho 4 particiones, se descarta la MSR,
     el código de arranque es propio (`PartitionTables/MbrBootCode`: busca la partición activa, lee

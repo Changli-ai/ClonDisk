@@ -80,7 +80,90 @@ public class CloneExecutorTests
         Assert.Equal(8 * MiB, result.BytesWritten);
         Assert.NotNull(result.DataHash);
         Assert.Equal(setup.OriginalSource, setup.TargetImage);
+
+        // Con los identificadores del origen, el clon se deja sin conexión y Windows no relee su tabla.
+        Assert.True(setup.Access.TargetOffline);
+        Assert.Equal(0, setup.Target.LayoutRefreshes);
+        Assert.Contains("sin conexión", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutOfflineSupportWindowsIsAskedToRereadTheTable()
+    {
+        var setup = new Setup();
+        setup.Access.OfflineSupported = false;
+
+        var result = setup.Run();
+
+        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+        Assert.Equal(setup.OriginalSource, setup.TargetImage);
         Assert.True(setup.Target.LayoutRefreshes > 0);
+    }
+
+    [Fact]
+    public void TableIsCopiedWithProvisionalIdsAndTheSourceIdsGoLast()
+    {
+        var setup = new Setup();
+        var guids = new List<Guid>();
+        setup.Target.AfterWrite = offset =>
+        {
+            if (offset == 0)
+            {
+                guids.Add(new Guid(setup.TargetImage.AsSpan(Sector + 56, 16)));
+            }
+        };
+
+        var result = setup.Run();
+
+        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+        Assert.Equal(3, guids.Count);
+        Assert.Equal(Guid.Empty, guids[0]);
+        Assert.NotEqual(SourceGuid, guids[1]);
+        Assert.NotEqual(Guid.Empty, guids[1]);
+        Assert.Equal(SourceGuid, guids[2]);
+        Assert.Null(TestDisks.Table(setup.TargetImage).Defect);
+    }
+
+    [Fact]
+    public void WindowsChangingADuplicateDiskIdNoLongerBreaksTheClone()
+    {
+        // Como en la prueba real del 18/11/2026: en cuanto aparece en línea una tabla con el mismo
+        // GUID que el disco original, «Windows» le pone otro.
+        var setup = new Setup();
+        setup.Target.AfterWrite = offset =>
+        {
+            var guid = setup.TargetImage.AsSpan(Sector + 56, 16);
+            if (offset == 0 && !setup.Access.TargetOffline && new Guid(guid) == SourceGuid)
+            {
+                Guid.NewGuid().TryWriteBytes(guid);
+            }
+        };
+
+        var result = setup.Run();
+
+        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+        Assert.True(result.Verified);
+        Assert.Equal(setup.OriginalSource, setup.TargetImage);
+    }
+
+    [Fact]
+    public void BlockedTableWriteIsExplainedWhenVerifying()
+    {
+        // Un antivirus que «protege el MBR» deja el principio del disco vacío.
+        var setup = new Setup();
+        var writesAtZero = 0;
+        setup.Target.AfterWrite = offset =>
+        {
+            if (offset == 0 && ++writesAtZero == 2)
+            {
+                setup.TargetImage.AsSpan(0, 34 * Sector).Clear();
+            }
+        };
+
+        var result = setup.Run();
+
+        Assert.Equal(CloneOutcome.VerificationFailed, result.Outcome);
+        Assert.Contains("vacío", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -107,7 +190,9 @@ public class CloneExecutorTests
         Assert.Equal(0, writes[0].Offset);
         Assert.Equal(0, writes[^1].Offset);
         var headWrites = writes.Where(w => w.Offset < PartitionTable.HeadBytes).ToList();
-        Assert.Equal(2, headWrites.Count);
+
+        // Borrado inicial, tabla con identificadores provisionales y tabla definitiva.
+        Assert.Equal(3, headWrites.Count);
     }
 
     [Fact]

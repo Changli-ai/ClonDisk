@@ -41,3 +41,4 @@ GetFileInformationByHandleEx
 SetVolumeLabel
 DeleteVolumeMountPoint
 GetVolumePathNamesForVolumeName
+IOCTL_DISK_SET_DISK_ATTRIBUTES

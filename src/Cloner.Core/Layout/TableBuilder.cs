@@ -180,6 +180,50 @@ internal static class TableBuilder
         return new BuiltTable(head, null);
     }
 
+    /// <summary>
+    /// Cambia los identificadores de una tabla ya preparada (la del origen, copiada tal cual):
+    /// GUID del disco y de las particiones en GPT, con sus CRC, o firma del disco en MBR.
+    /// </summary>
+    public static void ApplyIdentity(Span<byte> head, PartitionTableInfo table, TableIdentity identity, int sectorSize)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(identity);
+        if (table.Gpt is null)
+        {
+            if (identity.MbrSignature is { } signature)
+            {
+                BinaryPrimitives.WriteUInt32LittleEndian(head[440..], signature);
+            }
+
+            return;
+        }
+
+        var header = GptHeader.TryParse(head.Slice(sectorSize, sectorSize))
+            ?? throw new CloneException("La cabecera GPT preparada para el destino no es válida.");
+        var entries = head.Slice((int)(header.PartitionEntryLba * sectorSize), header.EntriesSectors * sectorSize);
+        for (var i = 0; i < header.EntryCount; i++)
+        {
+            var entry = entries.Slice(i * (int)header.EntrySize, (int)header.EntrySize);
+            if (entry[..16].IndexOfAnyExcept((byte)0) < 0)
+            {
+                continue;
+            }
+
+            var offset = BinaryPrimitives.ReadInt64LittleEndian(entry[32..]) * sectorSize;
+            if (identity.PartitionGuids.TryGetValue(offset, out var unique))
+            {
+                unique.TryWriteBytes(entry.Slice(16, 16));
+            }
+        }
+
+        var updated = header with
+        {
+            DiskGuid = identity.DiskGuid ?? header.DiskGuid,
+            EntriesCrc = Crc32.HashToUInt32(entries[..(int)header.EntriesBytes]),
+        };
+        updated.Encode(header.MyLba, header.AlternateLba, header.LastUsableLba, header.PartitionEntryLba).CopyTo(head.Slice(sectorSize, sectorSize));
+    }
+
     /// <summary>Bytes de la tabla dentro de la cabeza del destino (en la conversión, los de la tabla nueva).</summary>
     public static int TableBytes(PartitionTableInfo table, TargetLayout layout, int sectorSize)
     {

@@ -238,7 +238,7 @@ internal static class ClonePlanner
         }
         else if (source.Identifier is not null)
         {
-            warnings.Add("El clon tendrá el mismo identificador de disco que el origen: si ambos quedan conectados a la vez, Windows dejará uno de los dos sin conexión.");
+            warnings.Add("El clon tendrá el mismo identificador de disco que el origen. Para que Windows no se lo cambie mientras los dos están conectados, ClonDisk lo deja sin conexión al terminar: apaga el equipo antes de cambiar los discos.");
         }
 
         foreach (var placement in layout.Placements.Where(p => p.Shrinks))

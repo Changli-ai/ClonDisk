@@ -210,6 +210,35 @@ internal sealed class DiskDevice : IBlockDevice
         }
     }
 
+    /// <summary>
+    /// Pone el disco sin conexión o en línea con <c>IOCTL_DISK_SET_DISK_ATTRIBUTES</c>, sin guardarlo
+    /// (vuelve a su estado al reiniciar o reconectar). Devuelve falso si el disco no lo admite.
+    /// </summary>
+    public bool TrySetOffline(bool offline)
+    {
+        if (!_isDisk)
+        {
+            return false;
+        }
+
+        // SET_DISK_ATTRIBUTES: Version (tamaño, 40), Persist (FALSE), Attributes y AttributesMask
+        // con el bit DISK_ATTRIBUTE_OFFLINE (1).
+        Span<byte> input = stackalloc byte[40];
+        input.Clear();
+        BitConverter.TryWriteBytes(input, 40u);
+        BitConverter.TryWriteBytes(input[8..], offline ? 1UL : 0UL);
+        BitConverter.TryWriteBytes(input[16..], 1UL);
+        try
+        {
+            Ioctl(_handle, PInvoke.IOCTL_DISK_SET_DISK_ATTRIBUTES, input, []);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
     public void RefreshLayout()
     {
         if (_isDisk)

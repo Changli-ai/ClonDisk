@@ -65,7 +65,19 @@ internal sealed class CloneExecutor
             // Las particiones reducidas también: hasta formatearlas están vacías y, con letra de
             // unidad, el Explorador ofrecería formatearlas.
             var temporary = plan.NeedsFinishing && (plan.NewIdentity is null || plan.Layout.Created.Count > 0 || plan.FileSteps.Count > 0);
-            var copyIdentity = plan.NewIdentity ?? (temporary ? TableIdentity.CreateNew(plan.SourceTable.Style, plan.SourcePartitions) : null);
+
+            // Un clon que conserva los identificadores del origen se copia siempre con unos
+            // provisionales: si la tabla con los del origen aparece mientras el origen está
+            // conectado, Windows (o un antivirus) puede cambiarla y la verificación falla, como en
+            // la prueba real del 18/11/2026. Los definitivos se escriben al final, sin conexión.
+            var keepIdentity = plan.NewIdentity is null && plan.SourceTable.Style != PartitionStyle.Raw;
+            state.Provisional = keepIdentity ? TableIdentity.CreateNew(plan.SourceTable.Style, plan.SourcePartitions) : null;
+            var copyIdentity = plan.NewIdentity ?? state.Provisional;
+            if (keepIdentity)
+            {
+                CloneLog.ProvisionalIdentity(_log);
+            }
+
             BuiltTable? built = null;
             CheckTargetTable(target, plan);
             cancellation.ThrowIfCancellationRequested();
@@ -108,15 +120,15 @@ internal sealed class CloneExecutor
                 if (plan.Options.Verify)
                 {
                     state.Phase = ClonePhase.Verifying;
-                    var mismatch = Verify(target, written, meter, progress, cancellation);
-                    if (mismatch is { } offset)
+                    var mismatches = Verify(target, written, meter, progress, cancellation);
+                    if (mismatches.Count > 0)
                     {
-                        CloneLog.VerificationMismatch(_log, offset);
+                        var finding = Diagnose(plan, target, mismatches, state);
                         Invalidate(plan, target);
                         state.TargetComplete = false;
                         return Finish(state, started, CloneOutcome.VerificationFailed,
-                            $"El destino no coincide con lo copiado a partir del byte {offset.ToString("N0", Culture)}. "
-                            + "Se ha marcado como incompleto.");
+                            $"El destino no coincide con lo copiado a partir del byte {mismatches[0].Offset.ToString("N0", Culture)}. "
+                            + finding.TrimEnd('.') + ". Se ha marcado como incompleto; el detalle está en el registro.");
                     }
 
                     state.Verified = true;
@@ -128,6 +140,13 @@ internal sealed class CloneExecutor
             if (plan.NeedsFinishing)
             {
                 FinishClone(plan, target, head, temporary, volumes, state, meter, progress, cancellation);
+            }
+            else if (keepIdentity)
+            {
+                var sectorSize = plan.Source.SectorSize;
+                var tableBytes = TableBuilder.TableBytes(plan.SourceTable, plan.Layout, sectorSize);
+                var final = built is null ? null : TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, sectorSize, identity: null);
+                WriteFinalTable(target, final?.Head ?? state.FinalHead!, tableBytes, final?.Backup, state, meter, progress, lockOnline: null);
             }
 
             progress?.Report(meter.Snapshot(ClonePhase.Finishing, "Terminando"));
@@ -141,6 +160,15 @@ internal sealed class CloneExecutor
             if (state.FileErrors > 0)
             {
                 summary += $" {state.FileErrors.ToString("N0", Culture)} archivos o carpetas no se pudieron copiar; están en el registro.";
+            }
+
+            if (state.IdentityNote is not null)
+            {
+                summary += $" Atención: después de poner los identificadores definitivos, la tabla del clon cambió. {state.IdentityNote.TrimEnd('.')}. El detalle está en el registro.";
+            }
+            else if (state.LeftOffline)
+            {
+                summary += " El clon tiene los identificadores del original y se ha dejado sin conexión en este equipo para que Windows no se los cambie: apaga el equipo antes de cambiar los discos. Al reiniciar, o conectado a otro equipo, vuelve a estar en línea.";
             }
 
             return Finish(state, started, CloneOutcome.Succeeded, summary);
@@ -168,7 +196,8 @@ internal sealed class CloneExecutor
         finally
         {
             volumes.Release(completed: false);
-            if (target is not null && state.TargetModified)
+            // Sin conexión no se pide a Windows que relea la tabla: la vería junto a la del origen.
+            if (target is not null && state.TargetModified && !state.LeftOffline)
             {
                 RefreshLayout(target);
             }
@@ -413,7 +442,7 @@ internal sealed class CloneExecutor
                 {
                     try
                     {
-                        Produce(plan, ranges, source, head, built, volumes, zeros, free, full, written, overall, token);
+                        Produce(plan, ranges, source, head, built, volumes, state, zeros, free, full, written, overall, token);
                     }
                     catch (Exception ex)
                     {
@@ -493,6 +522,7 @@ internal sealed class CloneExecutor
         byte[] head,
         BuiltTable? built,
         VolumeSources volumes,
+        RunState state,
         AlignedBuffer zeros,
         BlockingCollection<AlignedBuffer> free,
         BlockingCollection<Chunk> full,
@@ -577,11 +607,21 @@ internal sealed class CloneExecutor
                         }
 
                         OverlayPartitionHeads(plan, source, volumes, data);
+
+                        // Tabla del origen copiada tal cual: se guarda la definitiva y se escribe con
+                        // los identificadores provisionales. La huella de lo copiado es la definitiva.
+                        if (built is null && state.Provisional is not null)
+                        {
+                            state.FinalHead = data.ToArray();
+                            TableBuilder.ApplyIdentity(data, plan.SourceTable, state.Provisional, plan.Source.SectorSize);
+                        }
+
+                        state.WrittenHead = data.ToArray();
                         break;
                 }
 
                 written.Add(new WrittenChunk(offset, length, XxHash3.HashToUInt64(data)));
-                overall.Append(data);
+                overall.Append(current?.Kind == CloneStepKind.WritePartitionTable && state.FinalHead is not null ? state.FinalHead : data);
                 full.Add(new Chunk(buffer, length, offset, IsClear: false, item), token);
             }
         }
@@ -738,26 +778,25 @@ internal sealed class CloneExecutor
         if (temporary)
         {
             WaitQuietly(meter, progress, "antes de poner los identificadores definitivos");
-            Say("Poniendo los identificadores definitivos");
             var refs = volumes.Values.Select(v => new VolumeRef(v, "del clon")).ToList();
-            using (_access.LockVolumes(refs, dismount: true))
+            var final = TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, sectorSize, plan.NewIdentity);
+            var tableBytes = TableBuilder.TableBytes(plan.SourceTable, plan.Layout, sectorSize);
+            if (plan.NewIdentity is null)
             {
-                var final = TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, sectorSize, plan.NewIdentity);
-                if (final.Backup is { } backup)
+                // Con los identificadores del origen: sin conexión, para que Windows no los cambie.
+                WriteFinalTable(target, final.Head, tableBytes, final.Backup, state, meter, progress, () => _access.LockVolumes(refs, dismount: true));
+            }
+            else
+            {
+                Say("Poniendo la tabla de particiones definitiva");
+                using (_access.LockVolumes(refs, dismount: true))
                 {
-                    WriteChecked(target, target.Length - backup.Length, backup);
+                    WriteTable(target, final.Head, tableBytes, final.Backup);
                 }
 
-                // Solo cambian los bytes de la tabla; el resto del primer MiB ya tiene sus datos.
-                var tableBytes = TableBuilder.TableBytes(plan.SourceTable, plan.Layout, sectorSize);
-                var current = ReadBytes(target, 0, PartitionTable.HeadBytes);
-                final.Head.AsSpan(0, tableBytes).CopyTo(current);
-                WriteChecked(target, 0, current);
-                target.Flush();
+                target.RefreshLayout();
+                CloneLog.FinalIdentity(_log);
             }
-
-            target.RefreshLayout();
-            CloneLog.FinalIdentity(_log);
         }
     }
 
@@ -851,6 +890,128 @@ internal sealed class CloneExecutor
             progress?.Report(meter.Snapshot(ClonePhase.Finishing, $"Pausa de seguridad {purpose}: {seconds} s")));
     }
 
+    /// <summary>
+    /// Escribe la tabla definitiva con los identificadores del origen. Antes pone el destino sin
+    /// conexión, para que Windows no la vea duplicada junto a la del origen y la cambie; si no se
+    /// puede, la escribe en línea (con <paramref name="lockOnline"/>, si el clon está montado). Unos
+    /// segundos después comprueba que sigue igual y, si no, lo anota con su diagnóstico.
+    /// </summary>
+    private void WriteFinalTable(
+        IBlockDevice target,
+        byte[] finalHead,
+        int tableBytes,
+        byte[]? backup,
+        RunState state,
+        ProgressMeter meter,
+        IProgress<CloneProgress>? progress,
+        Func<IDisposable>? lockOnline)
+    {
+        progress?.Report(meter.Snapshot(ClonePhase.Finishing, "Poniendo los identificadores definitivos"));
+        target.Flush();
+        state.LeftOffline = _access.SetOffline(target, offline: true);
+        CloneLog.TargetOffline(_log, state.LeftOffline);
+        if (state.LeftOffline)
+        {
+            try
+            {
+                WriteTable(target, finalHead, tableBytes, backup);
+            }
+            catch (IOException)
+            {
+                // Algún controlador no deja escribir en un disco sin conexión: se escribe en línea
+                // y se vuelve a quitar la conexión en cuanto termina.
+                _access.SetOffline(target, offline: false);
+                WriteTable(target, finalHead, tableBytes, backup);
+                state.LeftOffline = _access.SetOffline(target, offline: true);
+                CloneLog.TargetOffline(_log, state.LeftOffline);
+            }
+        }
+        else
+        {
+            using (lockOnline?.Invoke())
+            {
+                WriteTable(target, finalHead, tableBytes, backup);
+            }
+        }
+
+        CloneLog.FinalIdentity(_log);
+
+        // Si algo la cambia al aparecer (Windows o un antivirus), suele ser en los segundos siguientes.
+        var settle = _access.IdentitySettleTime;
+        if (settle > TimeSpan.Zero)
+        {
+            progress?.Report(meter.Snapshot(ClonePhase.Finishing, "Comprobando la tabla definitiva"));
+            Thread.Sleep(settle);
+        }
+
+        var now = ReadBytes(target, 0, Math.Max(tableBytes, 2 * target.SectorSize));
+        if (!now.AsSpan(0, tableBytes).SequenceEqual(finalHead.AsSpan(0, tableBytes)))
+        {
+            var finding = VerifyDiagnosis.Describe(finalHead.AsSpan(0, tableBytes), now.AsSpan(0, tableBytes), 0, target.SectorSize);
+            CloneLog.FinalTableChanged(_log, finding.Summary);
+            foreach (var line in finding.Details)
+            {
+                CloneLog.Diagnosis(_log, line);
+            }
+
+            state.IdentityNote = finding.Summary;
+        }
+    }
+
+    /// <summary>Escribe la copia de respaldo GPT (si la hay) y los bytes de la tabla del primer MiB, releyéndolos.</summary>
+    private static void WriteTable(IBlockDevice target, byte[] finalHead, int tableBytes, byte[]? backup)
+    {
+        if (backup is not null)
+        {
+            WriteChecked(target, target.Length - backup.Length, backup);
+        }
+
+        // Solo cambian los bytes de la tabla; el resto del primer MiB ya tiene sus datos.
+        var current = ReadBytes(target, 0, PartitionTable.HeadBytes);
+        finalHead.AsSpan(0, tableBytes).CopyTo(current);
+        WriteChecked(target, 0, current);
+        target.Flush();
+    }
+
+    /// <summary>
+    /// Explica en el registro qué no coincidió al verificar. Del primer MiB (la tabla) se compara
+    /// byte a byte con lo escrito; del resto se dice a qué partición pertenece cada bloque.
+    /// Devuelve el resumen para el mensaje del resultado.
+    /// </summary>
+    private string Diagnose(ClonePlan plan, IBlockDevice target, List<(long Offset, int Length)> mismatches, RunState state)
+    {
+        CloneLog.VerificationMismatch(_log, mismatches.Count, mismatches[0].Offset);
+        string? summary = null;
+        foreach (var (offset, length) in mismatches.Take(8))
+        {
+            if (offset == 0 && state.WrittenHead is { } writtenHead && length == writtenHead.Length)
+            {
+                var actual = ReadBytes(target, 0, length);
+                var finding = VerifyDiagnosis.Describe(writtenHead, actual, 0, target.SectorSize);
+                summary ??= finding.Summary;
+                CloneLog.Diagnosis(_log, finding.Summary);
+                foreach (var line in finding.Details)
+                {
+                    CloneLog.Diagnosis(_log, line);
+                }
+            }
+            else
+            {
+                var where = DescribeOffset(plan.SourcePartitions, offset) ?? "Espacio sin particionar";
+                CloneLog.Diagnosis(_log, $"Bloque de {length.ToString("N0", Culture)} bytes en el byte {offset.ToString("N0", Culture)} ({where}): su huella no coincide con lo escrito.");
+            }
+        }
+
+        if (mismatches.Count > 8)
+        {
+            CloneLog.Diagnosis(_log, $"… y {(mismatches.Count - 8).ToString("N0", Culture)} bloques más.");
+        }
+
+        return summary ?? (mismatches.Count == 1
+            ? "Solo no coincide un bloque"
+            : $"No coinciden {mismatches.Count.ToString("N0", Culture)} bloques");
+    }
+
     /// <summary>Escribe y relee para comprobar que el destino guarda exactamente esos bytes.</summary>
     private static void WriteChecked(IBlockDevice target, long offset, byte[] data)
     {
@@ -866,13 +1027,15 @@ internal sealed class CloneExecutor
     }
 
     /// <summary>Relee lo escrito y compara la huella de cada bloque. Devuelve el primer bloque distinto.</summary>
-    private static long? Verify(
+    /// <summary>Relee lo escrito y compara la huella de cada bloque. Devuelve los bloques que no coinciden.</summary>
+    private static List<(long Offset, int Length)> Verify(
         IBlockDevice target,
         List<WrittenChunk> written,
         ProgressMeter meter,
         IProgress<CloneProgress>? progress,
         CancellationToken cancellation)
     {
+        var mismatches = new List<(long Offset, int Length)>();
         using var buffer = new AlignedBuffer(ChunkBytes);
         foreach (var chunk in written)
         {
@@ -881,7 +1044,7 @@ internal sealed class CloneExecutor
             target.Read(chunk.Offset, data);
             if (XxHash3.HashToUInt64(data) != chunk.Hash)
             {
-                return chunk.Offset;
+                mismatches.Add((chunk.Offset, chunk.Length));
             }
 
             meter.Advance(chunk.Length);
@@ -891,7 +1054,7 @@ internal sealed class CloneExecutor
             }
         }
 
-        return null;
+        return mismatches;
     }
 
     /// <summary>Vuelve a borrar la tabla y el final del destino para que no parezca un disco válido.</summary>
@@ -998,6 +1161,21 @@ internal sealed class CloneExecutor
         public long BytesWritten { get; set; }
         public string? DataHash { get; set; }
         public int FileErrors { get; set; }
+
+        /// <summary>Identificadores con los que se copia la tabla si el clon conserva los del origen.</summary>
+        public TableIdentity? Provisional { get; set; }
+
+        /// <summary>Primer MiB definitivo, con la tabla del origen, si se copió con identificadores provisionales.</summary>
+        public byte[]? FinalHead { get; set; }
+
+        /// <summary>Primer MiB tal como se escribió, para explicar una verificación fallida.</summary>
+        public byte[]? WrittenHead { get; set; }
+
+        /// <summary>El destino quedó sin conexión tras poner los identificadores definitivos.</summary>
+        public bool LeftOffline { get; set; }
+
+        /// <summary>Qué cambió en la tabla definitiva después de escribirla, si cambió.</summary>
+        public string? IdentityNote { get; set; }
     }
 
     private readonly record struct Chunk(AlignedBuffer Buffer, int Length, long Offset, bool IsClear, string Item);

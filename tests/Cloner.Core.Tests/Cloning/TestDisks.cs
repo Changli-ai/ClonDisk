@@ -294,6 +294,28 @@ internal sealed class FakeDiskAccess : IDiskAccess
 
     public FakeFinisher FakeFinisher { get; } = new();
 
+    /// <summary>Si es falso, poner el destino sin conexión falla, como en un disco que no lo admite.</summary>
+    public bool OfflineSupported { get; set; } = true;
+
+    /// <summary>Llamadas a poner sin conexión (verdadero) o en línea (falso), en orden.</summary>
+    public List<bool> OfflineCalls { get; } = [];
+
+    public bool TargetOffline { get; private set; }
+
+    public bool SetOffline(IBlockDevice target, bool offline)
+    {
+        OfflineCalls.Add(offline);
+        if (!OfflineSupported)
+        {
+            return false;
+        }
+
+        TargetOffline = offline;
+        return true;
+    }
+
+    public TimeSpan IdentitySettleTime => TimeSpan.Zero;
+
     public ITargetFinisher Finisher => FakeFinisher;
 
     public IVolumeSource OpenVolume(string volumePath, int sectorSize)

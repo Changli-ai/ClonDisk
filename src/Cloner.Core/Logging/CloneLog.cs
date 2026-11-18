@@ -72,8 +72,20 @@ internal static partial class CloneLog
     [LoggerMessage(Level = LogLevel.Information, Message = "Verificación correcta.")]
     public static partial void VerificationPassed(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "La verificación no coincide en el bloque que empieza en el byte {Offset}.")]
-    public static partial void VerificationMismatch(ILogger logger, long offset);
+    [LoggerMessage(Level = LogLevel.Error, Message = "La verificación no coincide en {Count} bloques; el primero empieza en el byte {Offset}.")]
+    public static partial void VerificationMismatch(ILogger logger, int count, long offset);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Diagnóstico: {Text}")]
+    public static partial void Diagnosis(ILogger logger, string text);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "La tabla se copia con identificadores provisionales; los del origen se ponen al final, con el destino sin conexión.")]
+    public static partial void ProvisionalIdentity(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Destino sin conexión para poner los identificadores definitivos: {Offline}.")]
+    public static partial void TargetOffline(ILogger logger, bool offline);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "La tabla definitiva cambió después de escribirla: {Summary}")]
+    public static partial void FinalTableChanged(ILogger logger, string summary);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Se ha borrado de nuevo la tabla de particiones del destino.")]
     public static partial void TargetInvalidated(ILogger logger);

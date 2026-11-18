@@ -61,6 +61,10 @@ public sealed class VhdCloneTests : IDisposable
         Assert.True(result.Verified, result.Message);
         Assert.True(File.Exists(result.LogPath));
 
+        // Con los identificadores del origen, el clon queda sin conexión para que Windows no los cambie.
+        Assert.True(target.Info().IsOffline, "El clon debería quedar sin conexión.");
+        Assert.Contains("sin conexión", result.Message, StringComparison.Ordinal);
+
         source.Detach();
         target.Detach();
         var original = source.ReadData();

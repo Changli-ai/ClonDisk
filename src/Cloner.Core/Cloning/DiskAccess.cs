@@ -24,6 +24,16 @@ internal interface IDiskAccess
 
     /// <summary>Trabajo sobre el clon montado, después de copiar.</summary>
     ITargetFinisher Finisher { get; }
+
+    /// <summary>
+    /// Pone el destino sin conexión (o de nuevo en línea) solo hasta el próximo reinicio o hasta
+    /// que se desconecte. Sin conexión, Windows no monta sus volúmenes ni le cambia los
+    /// identificadores aunque coincidan con los de otro disco. Devuelve falso si no se pudo.
+    /// </summary>
+    bool SetOffline(IBlockDevice target, bool offline);
+
+    /// <summary>Espera, tras escribir la tabla definitiva, antes de comprobar que nadie la cambió.</summary>
+    TimeSpan IdentitySettleTime { get; }
 }
 
 /// <summary>Un volumen que se puede leer: una instantánea o un volumen que no puede cambiar.</summary>
@@ -86,6 +96,10 @@ internal sealed class Win32DiskAccess(bool virtualTargetOnly, IDiskInventory inv
     }
 
     public IDisposable LockVolumes(IReadOnlyList<VolumeRef> volumes, bool dismount) => VolumeLock.Acquire(volumes, dismount);
+
+    public bool SetOffline(IBlockDevice target, bool offline) => target is DiskDevice disk && disk.TrySetOffline(offline);
+
+    public TimeSpan IdentitySettleTime { get; } = TimeSpan.FromSeconds(5);
 
     public ISnapshotSet CreateSnapshots(IReadOnlyList<string> volumePaths, int sectorSize) =>
         new Win32SnapshotSet(VssSnapshotSet.Create(volumePaths), sectorSize);

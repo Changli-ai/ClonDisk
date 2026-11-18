@@ -197,6 +197,10 @@ public sealed class RawIoTests : IDisposable
 
         public ITargetFinisher Finisher => throw new NotSupportedException("Las imágenes de archivo no se montan.");
 
+        public bool SetOffline(IBlockDevice target, bool offline) => false;
+
+        public TimeSpan IdentitySettleTime => TimeSpan.Zero;
+
         private sealed class Nothing : IDisposable
         {
             public void Dispose()
