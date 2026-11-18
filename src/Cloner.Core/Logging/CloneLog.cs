@@ -81,6 +81,12 @@ internal static partial class CloneLog
     [LoggerMessage(Level = LogLevel.Information, Message = "La tabla se copia con identificadores provisionales; los del origen se ponen al final, con el destino sin conexión.")]
     public static partial void ProvisionalIdentity(ILogger logger);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Destino sin conexión durante la copia y la verificación: {Offline}.")]
+    public static partial void TargetOfflineForCopy(ILogger logger, bool offline);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Destino de nuevo en línea: {Online}.")]
+    public static partial void TargetOnline(ILogger logger, bool online);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Destino sin conexión para poner los identificadores definitivos: {Offline}.")]
     public static partial void TargetOffline(ILogger logger, bool offline);
 

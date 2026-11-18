@@ -86,6 +86,12 @@ internal sealed class CloneExecutor
             using (LockSourceVolumes(plan))
             {
                 CloneLog.VolumesLocked(_log);
+
+                // Sin conexión mientras se copia y se verifica: Windows no monta el clon a medias ni
+                // escribe en sus volúmenes (al montar un NTFS lo hace), lo que cambiaba bloques ya
+                // copiados y hacía fallar la verificación (prueba real del 18/11/2026).
+                state.OfflineForCopy = _access.SetOffline(target, offline: true);
+                CloneLog.TargetOfflineForCopy(_log, state.OfflineForCopy);
                 if (plan.RebuildsTable)
                 {
                     built = TableBuilder.Build(head, plan.SourceTable, plan.Layout, targetSectors, plan.Source.SectorSize, copyIdentity, provisional: temporary);
@@ -137,6 +143,14 @@ internal sealed class CloneExecutor
             }
 
             state.Phase = ClonePhase.Finishing;
+
+            // El clon vuelve a estar en línea si Windows tiene que montarlo para rematarlo o si
+            // tiene identificadores propios; con los del origen sigue sin conexión hasta el final.
+            if (state.OfflineForCopy && (plan.NeedsFinishing || !keepIdentity))
+            {
+                BringOnline(target, state);
+            }
+
             if (plan.NeedsFinishing)
             {
                 FinishClone(plan, target, head, temporary, volumes, state, meter, progress, cancellation);
@@ -196,6 +210,12 @@ internal sealed class CloneExecutor
         finally
         {
             volumes.Release(completed: false);
+            // Si no terminó bien, el destino (ya sin tabla) vuelve a estar en línea.
+            if (target is not null && state.OfflineForCopy && !state.LeftOffline)
+            {
+                BringOnline(target, state);
+            }
+
             // Sin conexión no se pide a Windows que relea la tabla: la vería junto a la del origen.
             if (target is not null && state.TargetModified && !state.LeftOffline)
             {
@@ -958,6 +978,13 @@ internal sealed class CloneExecutor
         }
     }
 
+    private void BringOnline(IBlockDevice target, RunState state)
+    {
+        var online = _access.SetOffline(target, offline: false);
+        state.OfflineForCopy = false;
+        CloneLog.TargetOnline(_log, online);
+    }
+
     /// <summary>Escribe la copia de respaldo GPT (si la hay) y los bytes de la tabla del primer MiB, releyéndolos.</summary>
     private static void WriteTable(IBlockDevice target, byte[] finalHead, int tableBytes, byte[]? backup)
     {
@@ -1007,9 +1034,12 @@ internal sealed class CloneExecutor
             CloneLog.Diagnosis(_log, $"… y {(mismatches.Count - 8).ToString("N0", Culture)} bloques más.");
         }
 
-        return summary ?? (mismatches.Count == 1
+        var count = mismatches.Count == 1
             ? "Solo no coincide un bloque"
-            : $"No coinciden {mismatches.Count.ToString("N0", Culture)} bloques");
+            : $"No coinciden {mismatches.Count.ToString("N0", Culture)} bloques";
+        return summary ?? (state.OfflineForCopy
+            ? count
+            : count + ". El destino estaba en línea durante la verificación: Windows o algún programa pudo montar el clon y escribir en él");
     }
 
     /// <summary>Escribe y relee para comprobar que el destino guarda exactamente esos bytes.</summary>
@@ -1170,6 +1200,9 @@ internal sealed class CloneExecutor
 
         /// <summary>Primer MiB tal como se escribió, para explicar una verificación fallida.</summary>
         public byte[]? WrittenHead { get; set; }
+
+        /// <summary>El destino se puso sin conexión al empezar a copiar y aún no ha vuelto a estar en línea.</summary>
+        public bool OfflineForCopy { get; set; }
 
         /// <summary>El destino quedó sin conexión tras poner los identificadores definitivos.</summary>
         public bool LeftOffline { get; set; }

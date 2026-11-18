@@ -13,7 +13,7 @@ programas y ajustes.
 > envía telemetría. Su código está publicado aquí bajo la licencia **GPL-3.0**: puedes leerlo,
 > compilarlo, modificarlo y compartirlo.
 
-> **Estado: en desarrollo (versión 0.1.1).** El clonado ya funciona y está probado con discos
+> **Estado: en desarrollo (versión 0.1.2).** El clonado ya funciona y está probado con discos
 > virtuales y en un equipo real, pero aún no se ha confirmado que un clon del disco del sistema
 > arranque, y varias funciones están por hacer (ver [Hoja de ruta](#hoja-de-ruta)). Úsalo con
 > copia de seguridad de lo importante.

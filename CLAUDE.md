@@ -14,7 +14,7 @@ prueba manual del usuario. El 15/11/2026 el usuario empezó la etapa 5, con lo q
 aceptada; sus pruebas de arranque (etapas 3 y 4) siguen pendientes.
 
 **Etapa 5 en curso** (destino más pequeño, RF-14, y conversión MBR↔GPT, RF-17): implementada en
-el motor, la CLI (`--gpt`/`--mbr`) y la interfaz. Pasan 188 pruebas unitarias y las de
+el motor, la CLI (`--gpt`/`--mbr`) y la interfaz. Pasan 190 pruebas unitarias y las de
 integración como administrador (incluidas reducir un VHD de 128 a 64 MB con flujos alternativos y
 enlaces duros, y convertir un VHD de GPT a MBR y de vuelta a GPT). El 17/11/2026 se probó en real
 (ver «Prueba real del 17/11/2026»): el flujo funciona, pero no se llegó a terminar un clonado
@@ -23,8 +23,11 @@ convertido, también el código de arranque MBR propio), que hará el usuario. L
 convertir a MBR solo se marca activa la partición del Windows en uso.
 
 **Publicado el 17/11/2026** (ver «Producto y distribución» → «Publicación»): repositorio público
-en GitHub con licencia GPL-3.0, Release v0.1.0 con el .zip y web en
-https://changli-ai.github.io/ClonDisk/, ya verificada en Google Search Console.
+en GitHub con licencia GPL-3.0, Releases con el .zip y web en
+https://changli-ai.github.io/ClonDisk/, ya verificada en Google Search Console. **Versión actual:
+0.1.2** (18/11/2026). La 0.1.1 corrigió la verificación fallida «a partir del byte 0» y la 0.1.2 la
+de los bloques de C: (Windows montaba el clon mientras se verificaba); ver «Prueba real del
+18/11/2026». Pendiente: que el usuario repita esa prueba con la 0.1.2 y arranque desde el clon.
 
 **Estado anterior:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
 sistema en caliente): instantáneas VSS, copia inteligente, planificador y ejecutor hechos. Pasan
@@ -234,10 +237,18 @@ está hecho.
     tocarlo, `git fetch` y fusionar. Temas del repositorio: `clonar-discos`, `clonacion-de-discos`,
     `clonar-disco-duro`, `migrar-windows-a-ssd`, `disk-cloning`, `disk-clone`, `ssd`, `hdd`,
     `windows`, `windows-11`, `csharp`, `dotnet`, `wpf`; página principal: la web.
-  - **Release v0.1.0** (https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.0), marcada como
-    la última: `ClonDisk-0.1.0-win-x64.zip` con `ClonDisk.exe`, `clondisk-cli.exe` y `LÉEME.txt`,
-    publicación autocontenida en un solo archivo y sin firmar; notas en español con la huella
-    SHA-256. Las descargas de la web apuntan a `releases/latest`.
+  - **Releases** (`.zip` con `ClonDisk.exe`, `clondisk-cli.exe` y `LÉEME.txt`: publicación
+    autocontenida en un solo archivo y sin firmar; notas en español con la huella SHA-256). Las
+    descargas de la web apuntan a `releases/latest`.
+    - **v0.1.0** (17/11/2026): primera versión pública.
+    - **v0.1.1** (18/11/2026,
+      https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.1): identificadores provisionales
+      durante la copia, tabla definitiva con el destino sin conexión y diagnóstico de la
+      verificación. Commit `5871528`; los dos `.exe` llevan `0.1.1+5871528…` en su versión de
+      producto. SHA-256 de `ClonDisk-0.1.1-win-x64.zip`:
+      `E437B102135DF7CF7325FF45EDCE78773CFA78CFA1ECC315EFD8852D47499AEA`.
+    - **v0.1.2** (18/11/2026, la última): el destino se queda sin conexión durante la copia y la
+      verificación, y el diagnóstico apunta a un montaje del clon si falla fuera de la tabla.
   - **Web** en GitHub Pages desde `docs/` (rama `main`): https://changli-ai.github.io/ClonDisk/.
     Una sola página en español (`index.html`, CSS propio, modo oscuro, adaptable al móvil) pensada
     para búsquedas como «clonar discos», «clonar disco duro a SSD» y «migrar Windows a SSD»: datos
@@ -253,9 +264,13 @@ está hecho.
   - **Herramientas:** GitHub CLI 2.104.0 instalado con winget en `C:\Program Files\GitHub CLI\gh.exe`
     (no está en el PATH de las consolas de desarrollo; winget está en
     `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`), con sesión iniciada como `Changli-ai`.
-  - **Al publicar una versión nueva:** subir `Version` en `Directory.Build.props`, publicar
-    autocontenido, crear la Release con el .zip y sus notas, y actualizar la versión y la fecha en
-    la web, en `sitemap.xml` y en el README.
+  - **Al publicar una versión nueva** (así se hizo la 0.1.1): subir `Version` en
+    `Directory.Build.props` y la versión en el README, en la web (`softwareVersion`, la nota bajo
+    los botones y la tabla de descarga) y en `LÉEME.txt`, y la fecha de `sitemap.xml`; confirmar y
+    subir **antes** de publicar, para que los `.exe` lleven el commit correcto en su versión;
+    publicar autocontenido en `publish/ClonDisk-<versión>-win-x64/`, comprimirlo y crear la Release
+    `v<versión>` con `gh release create … --latest` y notas en español con la huella SHA-256;
+    comprobar que la web muestra la versión nueva y que la descarga funciona.
 - RP-05 Se comprueba en un Windows 10 y un Windows 11 limpios, sin .NET ni herramientas de
   desarrollo: instalar, abrir, clonar entre VHD y desinstalar sin dejar restos.
 
@@ -445,8 +460,22 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
     definitiva. Diagnóstico (`VerifyDiagnosis`): si la verificación falla, se anotan todos los
     bloques distintos y, del primer MiB, qué bytes cambiaron (código de arranque, firma o GUID del
     disco, entradas GPT…) con una explicación: identificadores cambiados (Windows con discos
-    duplicados), principio vacío o código de arranque cambiado (antivirus). Pendiente: que el
-    usuario repita esa prueba.
+    duplicados), principio vacío o código de arranque cambiado (antivirus). Probado con 188 pruebas
+    unitarias (incluidas las que simulan a Windows cambiando el GUID de un disco duplicado y a un
+    antivirus vaciando el MBR) y las 9 de `VhdCloneTests` como administrador: Windows deja poner un
+    VHD sin conexión y escribir en él, y el clon de igual tamaño queda sin conexión con la tabla
+    idéntica a la del origen. Publicado en la versión 0.1.1.
+    - **Segundo intento (18/11/2026, versión 0.1.1):** el principio del disco ya coincidía, pero
+      fallaron 15 bloques desde el byte 122.683.392, el inicio de C: en el clon. Con la tabla
+      provisional (identificadores nuevos, sin choque con el original) Windows montaba la C: del
+      clon durante la verificación (17 min en un disco real; en un VHD dura menos de un segundo, por
+      eso las pruebas no lo veían) y escribía metadatos NTFS en ella. Arreglo (versión 0.1.2): el
+      destino se pone **sin conexión justo después de bloquear sus volúmenes** y sigue así durante la
+      copia y la verificación; vuelve a estar en línea al terminar si el clon tiene identificadores
+      nuevos o hay que montarlo para rematarlo, y si el clonado falla o se cancela. Con los
+      identificadores del origen se queda sin conexión. 190 pruebas unitarias (una simula a Windows
+      escribiendo en el clon montado). Pendiente: que el usuario repita la prueba con la 0.1.2 y
+      arranque desde el clon.
   - Conversión (`StyleConversion`, `CloneOptions.TargetStyle`): siempre con identificadores
     nuevos y particiones alineadas a 1 MiB. A MBR: como mucho 4 particiones, se descarta la MSR,
     el código de arranque es propio (`PartitionTables/MbrBootCode`: busca la partición activa, lee

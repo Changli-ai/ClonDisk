@@ -147,6 +147,44 @@ public class CloneExecutorTests
     }
 
     [Fact]
+    public void WindowsMountingTheCloneDuringVerificationNoLongerBreaksIt()
+    {
+        // Prueba real del 18/11/2026: con la tabla provisional en línea, Windows montaba la C: del
+        // clon mientras se verificaba y escribía en ella. Simulado: si la tabla aparece en línea,
+        // «Windows» escribe en el primer sector de la partición.
+        var setup = new Setup();
+        setup.Target.AfterWrite = offset =>
+        {
+            if (offset == 0 && !setup.Access.TargetOffline && setup.TargetImage[510] == 0x55)
+            {
+                setup.TargetImage[(int)MiB + 3] ^= 0xFF;
+            }
+        };
+
+        var result = setup.Run();
+
+        Assert.Equal(CloneOutcome.Succeeded, result.Outcome);
+        Assert.True(result.Verified);
+        Assert.Equal(setup.OriginalSource, setup.TargetImage);
+        Assert.True(setup.Access.OfflineCalls[0]);
+        Assert.True(setup.Access.TargetOffline);
+    }
+
+    [Fact]
+    public void FailedCloneBringsTheTargetBackOnline()
+    {
+        var setup = new Setup();
+        setup.Target.CorruptReads.Add(MiB);
+
+        var result = setup.Run();
+
+        Assert.Equal(CloneOutcome.VerificationFailed, result.Outcome);
+        Assert.True(setup.Access.OfflineCalls[0]);
+        Assert.False(setup.Access.TargetOffline);
+        Assert.True(setup.Target.LayoutRefreshes > 0);
+    }
+
+    [Fact]
     public void BlockedTableWriteIsExplainedWhenVerifying()
     {
         // Un antivirus que «protege el MBR» deja el principio del disco vacío.
