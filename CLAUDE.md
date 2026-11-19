@@ -251,7 +251,8 @@ está hecho.
     (desde la v0.1.3, 19/11/2026): los botones «Descargar» de la web, de la raíz del dominio y el
     `downloadUrl` de los datos estructurados apuntan a
     `releases/latest/download/ClonDisk-win-x64.zip`, que descarga directamente el .zip de la última
-    versión (GitHub lo sirve como `attachment`); «Todas las versiones» sigue yendo a `releases`.
+    versión (GitHub lo sirve como `attachment`); «Todas las versiones» sigue yendo a `releases`. El
+    enlace «Descarga» del README apunta también a la descarga directa.
     - **v0.1.0** (17/11/2026): primera versión pública.
     - **v0.1.1** (18/11/2026,
       https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.1): identificadores provisionales
@@ -290,7 +291,14 @@ está hecho.
     `https://changli-ai.github.io/` está verificada en Search Console (la misma etiqueta
     `google-site-verification` que la web de ClonDisk, en el `index.html` de la raíz; no quitarla)
     y su sitemap enviado (19/11/2026). Google tarda días o semanas en cambiar icono y nombre;
-    pendiente comprobarlo en los resultados.
+    pendiente comprobarlo en los resultados. Botones de la raíz: «Ir a ClonDisk» (`/ClonDisk/`) y
+    «Descargar» (descarga directa de `ClonDisk-win-x64.zip`). Ese repositorio **no tiene copia en
+    este equipo** (se preparó en una carpeta temporal): para cambiar la raíz, clonarlo con
+    `gh repo clone Changli-ai/changli-ai.github.io`, editar, confirmar y subir; GitHub Pages lo
+    publica en menos de un minuto.
+  - **Estado en Google (19/11/2026):** la web ya aparece en los resultados con su título («ClonDisk:
+    clonar discos gratis en Windows») y su descripción; el icono y el nombre del sitio aún eran
+    los genéricos de GitHub Pages, que es lo que debe corregir la página raíz.
   - **Herramientas:** GitHub CLI 2.104.0 instalado con winget en `C:\Program Files\GitHub CLI\gh.exe`
     (no está en el PATH de las consolas de desarrollo; winget está en
     `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`), con sesión iniciada como `Changli-ai`.
