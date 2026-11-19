@@ -6,7 +6,7 @@ particiones entre HDD y SSD (HDD↔SSD, HDD↔HDD, SSD↔SSD; SATA, M.2 y NVMe, 
 original, pones el clon y el equipo arranca y funciona igual que antes, con tus archivos,
 programas y ajustes.
 
-**Web:** https://changli-ai.github.io/ClonDisk/ · **Descarga:** [última versión](https://github.com/Changli-ai/ClonDisk/releases/latest)
+**Web:** https://changli-ai.github.io/ClonDisk/ · **Descarga:** [última versión](https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip)
 
 > **Gratis, sin anuncios y de código abierto.** ClonDisk no cuesta nada, no muestra publicidad,
 > no pide registrarse, no tiene funciones «premium» bloqueadas, no se conecta a internet y no

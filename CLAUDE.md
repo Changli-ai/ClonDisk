@@ -246,8 +246,12 @@ está hecho.
     `clonar-disco-duro`, `migrar-windows-a-ssd`, `disk-cloning`, `disk-clone`, `ssd`, `hdd`,
     `windows`, `windows-11`, `csharp`, `dotnet`, `wpf`; página principal: la web.
   - **Releases** (`.zip` con `ClonDisk.exe`, `clondisk-cli.exe` y `LÉEME.txt`: publicación
-    autocontenida en un solo archivo y sin firmar; notas en español con la huella SHA-256). Las
-    descargas de la web apuntan a `releases/latest`.
+    autocontenida en un solo archivo y sin firmar; notas en español con la huella SHA-256). Cada
+    Release lleva además una copia idéntica del .zip con **nombre fijo, `ClonDisk-win-x64.zip`**
+    (desde la v0.1.3, 19/11/2026): los botones «Descargar» de la web, de la raíz del dominio y el
+    `downloadUrl` de los datos estructurados apuntan a
+    `releases/latest/download/ClonDisk-win-x64.zip`, que descarga directamente el .zip de la última
+    versión (GitHub lo sirve como `attachment`); «Todas las versiones» sigue yendo a `releases`.
     - **v0.1.0** (17/11/2026): primera versión pública.
     - **v0.1.1** (18/11/2026,
       https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.1): identificadores provisionales
@@ -295,7 +299,9 @@ está hecho.
     los botones y la tabla de descarga) y en `LÉEME.txt`, y la fecha de `sitemap.xml`; confirmar y
     subir **antes** de publicar, para que los `.exe` lleven el commit correcto en su versión;
     publicar autocontenido en `publish/ClonDisk-<versión>-win-x64/`, comprimirlo y crear la Release
-    `v<versión>` con `gh release create … --latest` y notas en español con la huella SHA-256;
+    `v<versión>` con `gh release create … --latest` y notas en español con la huella SHA-256,
+    subiendo **los dos archivos**: `ClonDisk-<versión>-win-x64.zip` y su copia
+    `ClonDisk-win-x64.zip` (sin ella, la descarga directa de la web daría error 404);
     comprobar que la web muestra la versión nueva y que la descarga funciona.
 - RP-05 Se comprueba en un Windows 10 y un Windows 11 limpios, sin .NET ni herramientas de
   desarrollo: instalar, abrir, clonar entre VHD y desinstalar sin dejar restos.
