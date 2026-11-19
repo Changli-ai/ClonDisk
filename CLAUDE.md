@@ -260,7 +260,9 @@ está hecho.
     - **v0.1.3** (19/11/2026, la última,
       https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.3): aviso destacado al terminar un
       clon que se deja sin conexión y «Reparar el arranque» (interfaz y CLI `repair-boot`),
-      probado por el usuario en un clon real que no arrancaba y que, reparado, arrancó.
+      probado por el usuario en un clon real que no arrancaba y que, reparado, arrancó. Commit
+      `8d23d77`; SHA-256 de `ClonDisk-0.1.3-win-x64.zip`:
+      `4AF43383E6EAE78C41A493E17D1F73955381ECDB246677BF45EA5A005EFE8522`.
   - **Web** en GitHub Pages desde `docs/` (rama `main`): https://changli-ai.github.io/ClonDisk/.
     Una sola página en español (`index.html`, CSS propio, modo oscuro, adaptable al móvil) pensada
     para búsquedas como «clonar discos», «clonar disco duro a SSD» y «migrar Windows a SSD»: datos
