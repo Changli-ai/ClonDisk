@@ -275,6 +275,18 @@ está hecho.
     indexación solicitada el 17/11/2026. El sitemap salía «No se ha podido obtener», lo normal en
     una propiedad recién creada. Pendiente: confirmar que la página queda indexada
     (`site:changli-ai.github.io/ClonDisk`).
+  - **Raíz del dominio (19/11/2026):** Google ya mostraba la web en sus resultados, pero con el
+    icono genérico y el nombre de sitio «GitHub Pages documentation», porque los toma de la raíz
+    `https://changli-ai.github.io/`, que no existía. Se creó el repositorio público
+    https://github.com/Changli-ai/changli-ai.github.io (GitHub Pages en la raíz, rama `main`) con
+    una página de inicio que presenta ClonDisk y enlaza a `/ClonDisk/`: favicon (`favicon.ico` y
+    PNG de 48, 96 y 192 px sacados del fotograma de 256 px de `ClonDisk.ico`), datos
+    estructurados `WebSite` con el nombre «ClonDisk», `site.webmanifest`, `robots.txt` (que vale
+    para todo el dominio) y `sitemap.xml` con la raíz y `/ClonDisk/`. La propiedad
+    `https://changli-ai.github.io/` está verificada en Search Console (la misma etiqueta
+    `google-site-verification` que la web de ClonDisk, en el `index.html` de la raíz; no quitarla)
+    y su sitemap enviado (19/11/2026). Google tarda días o semanas en cambiar icono y nombre;
+    pendiente comprobarlo en los resultados.
   - **Herramientas:** GitHub CLI 2.104.0 instalado con winget en `C:\Program Files\GitHub CLI\gh.exe`
     (no está en el PATH de las consolas de desarrollo; winget está en
     `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`), con sesión iniciada como `Changli-ai`.
