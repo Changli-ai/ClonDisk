@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows.Media;
 using Cloner.Core;
+using Cloner.Core.Cloning;
 using Cloner.Core.Inventory;
 
 namespace Cloner.App.ViewModels;
@@ -53,7 +54,11 @@ public sealed class DiskViewModel
         ];
         Segments = BuildSegments(disk);
         Partitions = disk.Partitions.Select(BuildPartition).ToList();
+        CanRepairBoot = BootRepairService.CannotRepair(disk) is null;
     }
+
+    /// <summary>Puede tener un Windows clonado cuyo arranque se puede rehacer.</summary>
+    public bool CanRepairBoot { get; }
 
     public int Number { get; }
     public string Model { get; }

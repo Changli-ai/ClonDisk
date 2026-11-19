@@ -182,7 +182,7 @@ internal sealed class CloneExecutor
             }
             else if (state.LeftOffline)
             {
-                summary += " El clon tiene los identificadores del original y se ha dejado sin conexión en este equipo para que Windows no se los cambie: apaga el equipo antes de cambiar los discos. Al reiniciar, o conectado a otro equipo, vuelve a estar en línea.";
+                summary += " El clon tiene los identificadores del original y se ha dejado sin conexión en este equipo para que Windows no se los cambie.";
             }
 
             return Finish(state, started, CloneOutcome.Succeeded, summary);
@@ -1125,6 +1125,7 @@ internal sealed class CloneExecutor
             TargetModified = state.TargetModified,
             TargetComplete = state.TargetComplete,
             Verified = state.Verified,
+            TargetLeftOffline = state.LeftOffline && outcome == CloneOutcome.Succeeded,
             BytesWritten = state.BytesWritten,
             Elapsed = _time.GetElapsedTime(started),
             DataHash = state.DataHash,

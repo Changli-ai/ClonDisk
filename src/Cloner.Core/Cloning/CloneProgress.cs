@@ -54,6 +54,12 @@ public sealed record CloneResult
     /// <summary>La verificación se hizo y coincidió.</summary>
     public bool Verified { get; init; }
 
+    /// <summary>
+    /// El clon conserva los identificadores del origen y se dejó sin conexión en este equipo: no
+    /// hay que ponerlo en línea aquí, sino apagar y cambiar los discos.
+    /// </summary>
+    public bool TargetLeftOffline { get; init; }
+
     public long BytesWritten { get; init; }
     public TimeSpan Elapsed { get; init; }
 

@@ -54,6 +54,30 @@ internal sealed class VirtualDisk : IDisposable
         }
     }
 
+    /// <summary>Crea y monta un VHD GPT como el de un Windows: partición EFI (FAT32) y otra NTFS de datos.</summary>
+    public static VirtualDisk CreateWithEfi(string path, int sizeMiB)
+    {
+        var script = new StringBuilder()
+            .AppendLine(CultureInfo.InvariantCulture, $"create vdisk file=\"{path}\" maximum={sizeMiB} type=fixed")
+            .AppendLine(CultureInfo.InvariantCulture, $"select vdisk file=\"{path}\"")
+            .AppendLine("attach vdisk")
+            .AppendLine("convert gpt")
+            .AppendLine("create partition efi size=40")
+            .AppendLine("format fs=fat32 quick label=EFI")
+            .AppendLine("create partition primary")
+            .AppendLine("format fs=ntfs quick label=DATOS");
+        try
+        {
+            RunDiskPart(script.ToString());
+            return new VirtualDisk(path, FindByLocation(path));
+        }
+        catch
+        {
+            TryDetach(path);
+            throw;
+        }
+    }
+
     /// <summary>Monta el disco; en solo lectura, Windows no puede modificarlo mientras tanto.</summary>
     public void Attach(bool readOnly = false)
     {

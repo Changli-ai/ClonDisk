@@ -22,6 +22,10 @@ public partial class MainWindow : Window
         SidebarLogo.Source = AppIcon.Largest();
         SidebarVersion.Text = AppIcon.Version;
         viewModel.PickDisk = (title, choices) => DiskPickerWindow.Pick(this, title, choices);
+        viewModel.ConfirmRepair = question => MessageBox.Show(
+            this, question, "Reparar el arranque · ClonDisk", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes;
+        viewModel.ShowRepairResult = (text, ok) => MessageBox.Show(
+            this, text, "Reparar el arranque · ClonDisk", MessageBoxButton.OK, ok ? MessageBoxImage.Information : MessageBoxImage.Error);
         viewModel.ShowCloneWizard = createViewModel =>
         {
             var wizard = new CloneWindow { Owner = this };
@@ -41,6 +45,6 @@ public partial class MainWindow : Window
     internal static MainViewModel CreateViewModel()
     {
         var inventory = new DiskInventory();
-        return new MainViewModel(inventory, new CloneService(inventory));
+        return new MainViewModel(inventory, new CloneService(inventory), new BootRepairService(inventory));
     }
 }

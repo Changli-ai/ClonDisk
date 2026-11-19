@@ -82,7 +82,13 @@ internal static class MountedDevices
         return map;
     }
 
-    /// <summary>GUID único de cada partición de un origen GPT, por su desplazamiento.</summary>
+    /// <summary>GUID único de cada partición de una tabla GPT, por su desplazamiento.</summary>
+    public static Dictionary<long, Guid> PartitionGuids(ReadOnlySpan<byte> head, PartitionTableInfo table, int sectorSize)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        return SourceGuids(head, table, sectorSize);
+    }
+
     private static Dictionary<long, Guid> SourceGuids(ReadOnlySpan<byte> sourceHead, PartitionTableInfo table, int sectorSize)
     {
         var guids = new Dictionary<long, Guid>();

@@ -85,6 +85,7 @@ public class CloneExecutorTests
         Assert.True(setup.Access.TargetOffline);
         Assert.Equal(0, setup.Target.LayoutRefreshes);
         Assert.Contains("sin conexión", result.Message, StringComparison.Ordinal);
+        Assert.True(result.TargetLeftOffline);
     }
 
     [Fact]

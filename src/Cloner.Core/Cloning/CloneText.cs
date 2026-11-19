@@ -10,6 +10,21 @@ public static class CloneText
 
     public const string ConfirmationWord = "BORRAR";
 
+    /// <summary>Palabra que se pide escribir en la CLI antes de reparar el arranque de un disco.</summary>
+    public const string RepairConfirmationWord = "REPARAR";
+
+    /// <summary>Título del aviso para un clon que se dejó sin conexión.</summary>
+    public const string OfflineNoticeTitle = "Importante: no pongas el clon en línea en este equipo";
+
+    /// <summary>Pasos para usar un clon que se dejó sin conexión.</summary>
+    public static IReadOnlyList<string> OfflineNoticeSteps { get; } =
+    [
+        "Apaga el equipo. No pongas el clon «En línea» en Administración de discos: con el original conectado, Windows le cambiaría los identificadores y el clon dejaría de arrancar.",
+        "Quita el disco original y pon el clon en su lugar.",
+        "Enciende el equipo: arrancará desde el clon.",
+        "Si el clon no arranca (por ejemplo, con el error 0xc000000e), conéctalo de nuevo junto al original y usa «Reparar el arranque» en «Discos del equipo».",
+    ];
+
     public static string Phase(ClonePhase phase) => phase switch
     {
         ClonePhase.Preparing => "Preparando",

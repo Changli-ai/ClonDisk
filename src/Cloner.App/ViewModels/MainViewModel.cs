@@ -11,14 +11,16 @@ public sealed partial class MainViewModel : ObservableObject
 {
     private readonly IDiskInventory _inventory;
     private readonly ICloneService _cloneService;
+    private readonly IBootRepairService? _bootRepair;
     private IReadOnlyList<DiskInfo> _disks = [];
 
-    public MainViewModel(IDiskInventory inventory, ICloneService cloneService)
+    public MainViewModel(IDiskInventory inventory, ICloneService cloneService, IBootRepairService? bootRepair = null)
     {
         ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(cloneService);
         _inventory = inventory;
         _cloneService = cloneService;
+        _bootRepair = bootRepair;
         SelectedNav = NavItem.All[0];
         DiskCopy = new CopyPanelViewModel(
             "Clonar un disco",
@@ -56,12 +58,63 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public Action<Func<ICloneDialogs, CloneViewModel>>? ShowCloneWizard { get; set; }
 
+    /// <summary>La ventana lo asigna: pregunta (sí o no) antes de reparar el arranque de un disco.</summary>
+    public Func<string, bool>? ConfirmRepair { get; set; }
+
+    /// <summary>La ventana lo asigna: muestra el resultado de la reparación (texto y si fue bien).</summary>
+    public Action<string, bool>? ShowRepairResult { get; set; }
+
+    /// <summary>Lo que está haciendo la reparación del arranque en curso, o nulo.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RepairBootCommand))]
+    public partial string? RepairStatus { get; set; }
+
+    private bool CanRepairBoot => _bootRepair is not null && RepairStatus is null && SelectedDisk is { CanRepairBoot: true };
+
+    /// <summary>
+    /// Rehace el arranque del disco seleccionado: para un clon que se puso en línea junto al
+    /// original y ya no arranca (0xc000000e).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRepairBoot))]
+    private async Task RepairBootAsync()
+    {
+        var disk = SelectedDisk!;
+        var question =
+            $"ClonDisk va a rehacer el arranque del disco {disk.Number} ({disk.Model}):\n\n"
+            + "• lo pondrá en línea si está sin conexión,\n"
+            + "• buscará su Windows y su partición de arranque,\n"
+            + "• corregirá la letra C: en su registro y\n"
+            + "• volverá a crear sus archivos de arranque con bcdboot.\n\n"
+            + "No borra datos. Úsalo con el clon conectado como segundo disco, arrancando desde el original.\n\n"
+            + "¿Reparar el arranque?";
+        if (ConfirmRepair?.Invoke(question) != true)
+        {
+            return;
+        }
+
+        RepairStatus = "Empezando la reparación";
+        try
+        {
+            var progress = new Progress<string>(text => RepairStatus = text + "…");
+            var result = await _bootRepair!.RepairAsync(disk.Number, progress);
+            var text = result.LogPath is null ? result.Message : $"{result.Message}\n\nRegistro: {result.LogPath}";
+            ShowRepairResult?.Invoke(text, result.Succeeded);
+        }
+        finally
+        {
+            RepairStatus = null;
+        }
+
+        await RefreshAsync();
+    }
+
     public ObservableCollection<DiskViewModel> Disks { get; } = [];
 
     /// <summary>Ya se intentó leer los discos al menos una vez (con o sin éxito).</summary>
     public bool HasLoaded { get; private set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RepairBootCommand))]
     public partial DiskViewModel? SelectedDisk { get; set; }
 
     /// <summary>Mensaje de carga, de error o de lista vacía. Nulo cuando hay discos que mostrar.</summary>

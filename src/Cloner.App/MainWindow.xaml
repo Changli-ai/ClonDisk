@@ -608,6 +608,18 @@
                                     </ItemsControl>
                                     <ItemsControl ItemsSource="{Binding Identity}"
                                                   ItemTemplate="{StaticResource PropertyRowTemplate}" />
+
+                                    <StackPanel Margin="0,14,0,0"
+                                                Visibility="{Binding CanRepairBoot, Converter={StaticResource BoolToVisibility}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="Reparar el arranque…" Style="{StaticResource SecondaryButton}"
+                                                    Command="{Binding DataContext.RepairBootCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                            <TextBlock Text="{Binding DataContext.RepairStatus, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                       Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        </StackPanel>
+                                        <TextBlock Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                                   Text="Para un clon de Windows que no arranca (por ejemplo, con el error 0xc000000e) porque se puso en línea junto al original. Rehace su arranque sin borrar datos." />
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
 

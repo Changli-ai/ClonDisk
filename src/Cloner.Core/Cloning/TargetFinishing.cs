@@ -41,6 +41,13 @@ internal interface ITargetFinisher
     void RepairBoot(BootRepair repair);
 
     /// <summary>
+    /// Repara un clon ya terminado: en su registro, la letra C: pasa a apuntar a
+    /// <paramref name="windowsIdentity"/> (la identidad actual de su partición de Windows) y se
+    /// rehace su BCD con bcdboot. Devuelve cuántos valores de MountedDevices se corrigieron.
+    /// </summary>
+    int RepairBootInPlace(string windowsVolume, string systemVolume, bool uefi, byte[] windowsIdentity);
+
+    /// <summary>
     /// Espera antes de que desaparezcan los volúmenes del clon: quitarlos justo después de
     /// montarlos puede bloquear el equipo por una carrera de volsnap (incidente del 14/11/2026).
     /// </summary>

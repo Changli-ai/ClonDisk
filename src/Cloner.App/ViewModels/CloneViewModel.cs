@@ -276,6 +276,15 @@ public sealed partial class CloneViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ExportLogCommand))]
     public partial string? LogPath { get; set; }
 
+    /// <summary>El clon se dejó sin conexión: se muestra cómo usarlo sin estropear su arranque.</summary>
+    [ObservableProperty]
+    public partial bool ShowOfflineNotice { get; set; }
+
+    public string OfflineNoticeTitle { get; } = CloneText.OfflineNoticeTitle;
+
+    public IReadOnlyList<string> OfflineNoticeSteps { get; } =
+        CloneText.OfflineNoticeSteps.Select((step, i) => $"{i + 1}. {step}").ToList();
+
     private bool CanReview => Source is not null && Target is not null && !IsPlanning;
 
     [RelayCommand(CanExecute = nameof(CanReview))]
@@ -468,5 +477,6 @@ public sealed partial class CloneViewModel : ObservableObject
 
         ResultDetails = details;
         LogPath = result.LogPath;
+        ShowOfflineNotice = result.TargetLeftOffline;
     }
 }

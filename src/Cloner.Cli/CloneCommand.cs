@@ -140,6 +140,15 @@ internal static class CloneCommand
             Console.WriteLine();
             Console.WriteLine($"{CloneText.Outcome(result.Outcome)}: {result.Message}");
             Console.WriteLine($"Duración: {CloneText.Duration(result.Elapsed)}.");
+            if (result.TargetLeftOffline)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"*** {CloneText.OfflineNoticeTitle} ***");
+                for (var i = 0; i < CloneText.OfflineNoticeSteps.Count; i++)
+                {
+                    Console.WriteLine($"  {i + 1}. {CloneText.OfflineNoticeSteps[i]}");
+                }
+            }
             if (result.LogPath is not null)
             {
                 Console.WriteLine($"Registro: {result.LogPath}");

@@ -13,7 +13,7 @@ programas y ajustes.
 > envía telemetría. Su código está publicado aquí bajo la licencia **GPL-3.0**: puedes leerlo,
 > compilarlo, modificarlo y compartirlo.
 
-> **Estado: en desarrollo (versión 0.1.2).** El clonado ya funciona y está probado con discos
+> **Estado: en desarrollo (versión 0.1.3).** El clonado ya funciona y está probado con discos
 > virtuales y en un equipo real, pero aún no se ha confirmado que un clon del disco del sistema
 > arranque, y varias funciones están por hacer (ver [Hoja de ruta](#hoja-de-ruta)). Úsalo con
 > copia de seguridad de lo importante.
@@ -71,6 +71,10 @@ programas y ajustes.
 - **Progreso en tiempo real:** porcentaje, velocidad, tiempo restante y lo que se está copiando.
 - **Cancelación segura** en cualquier momento, con aviso visible mientras se detiene.
 - **Registro detallado** de cada operación, exportable.
+- **Reparar el arranque de un clon** que no arranca (por ejemplo, con el error 0xc000000e porque
+  se puso en línea junto al original): desde «Discos del equipo» o con `clondisk-cli repair-boot`,
+  ClonDisk lo pone en línea, corrige la letra C: en su registro y rehace su arranque con `bcdboot`,
+  sin borrar datos.
 - **Avisos útiles** antes de empezar: BitLocker, salud del disco (SMART), espacio, identificadores…
 - **Línea de comandos** (`clondisk-cli`) para automatizar o usar sin interfaz.
 - **Rápido:** lectura y escritura en hilos separados con búferes grandes; la copia archivo a
@@ -115,6 +119,7 @@ Desde una consola de administrador:
 clondisk-cli list                    # discos y particiones (solo lectura)
 clondisk-cli plan 0 1                # qué haría un clonado del disco 0 al 1, sin escribir nada
 clondisk-cli clone 0 1               # clona; pide escribir BORRAR para confirmar
+clondisk-cli repair-boot 1           # rehace el arranque de un clon; pide escribir REPARAR
 ```
 
 Opciones de `plan` y `clone`:

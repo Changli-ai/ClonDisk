@@ -388,6 +388,17 @@ internal sealed class FakeFinisher : ITargetFinisher
 
     public void RepairBoot(BootRepair repair) => Repairs.Add(repair);
 
+    public List<(string Windows, string System, bool Uefi, byte[] Identity)> InPlaceRepairs { get; } = [];
+
+    /// <summary>Valores de MountedDevices que «corrige» una reparación en el sitio.</summary>
+    public int InPlaceTranslated { get; set; } = 1;
+
+    public int RepairBootInPlace(string windowsVolume, string systemVolume, bool uefi, byte[] windowsIdentity)
+    {
+        InPlaceRepairs.Add((windowsVolume, systemVolume, uefi, windowsIdentity));
+        return InPlaceTranslated;
+    }
+
     public void WaitBeforeRemovingVolumes(Action<int>? secondsLeft = null)
     {
         QuietWaits++;

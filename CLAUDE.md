@@ -25,9 +25,13 @@ convertir a MBR solo se marca activa la partición del Windows en uso.
 **Publicado el 17/11/2026** (ver «Producto y distribución» → «Publicación»): repositorio público
 en GitHub con licencia GPL-3.0, Releases con el .zip y web en
 https://changli-ai.github.io/ClonDisk/, ya verificada en Google Search Console. **Versión actual:
-0.1.2** (18/11/2026). La 0.1.1 corrigió la verificación fallida «a partir del byte 0» y la 0.1.2 la
-de los bloques de C: (Windows montaba el clon mientras se verificaba); ver «Prueba real del
-18/11/2026». Pendiente: que el usuario repita esa prueba con la 0.1.2 y arranque desde el clon.
+0.1.3** (publicada el 19/11/2026). La 0.1.1 corrigió la verificación fallida «a partir del byte 0»,
+la 0.1.2 la de los bloques de C: (Windows montaba el clon mientras se verificaba) y la 0.1.3 añade
+el aviso destacado al terminar y «Reparar el arranque»; ver «Prueba real del 18/11/2026». Con la
+0.1.2 el clon se completó y verificó, pero no arrancó (0xc000000e) porque el usuario lo puso en
+línea junto al original antes de cambiar los discos. **El 19/11/2026, tras «Reparar el arranque»
+con la 0.1.3, el clon arrancó Windows en el hardware real con los archivos del original** (primera
+vez que un clon del disco del sistema hecho con ClonDisk arranca).
 
 **Estado anterior:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
 sistema en caliente): instantáneas VSS, copia inteligente, planificador y ejecutor hechos. Pasan
@@ -42,6 +46,10 @@ MB/s y se canceló al 12 %. Recomendación para la prueba: destino en otro disco
 mayor que el origen (el formato VHD redondea su tamaño hacia abajo); en VirtualBox, máquina con
 EFI y controladora NVMe. La etapa no está completa hasta que el usuario confirme que arranca.
 El 15/11/2026 el usuario decidió empezar la etapa 4 con esta prueba aún pendiente.
+**Avance del 19/11/2026:** un clon del disco del sistema (GPT/UEFI, WD de 250 GB a otro idéntico,
+en otro equipo con Windows 10) arrancó en hardware real, pero después de «Reparar el arranque»,
+porque se había puesto en línea junto al original. Falta comprobar que arranca **sin reparación**
+(RF-11) cuando se apaga y se cambian los discos sin ponerlo en línea, como pide el aviso.
 
 Si el proceso de clonado se termina a la fuerza (no cancelado), sus instantáneas no
 persistentes quedan hasta el siguiente reinicio: `vssadmin delete shadows` no puede borrar las
@@ -247,8 +255,12 @@ está hecho.
       verificación. Commit `5871528`; los dos `.exe` llevan `0.1.1+5871528…` en su versión de
       producto. SHA-256 de `ClonDisk-0.1.1-win-x64.zip`:
       `E437B102135DF7CF7325FF45EDCE78773CFA78CFA1ECC315EFD8852D47499AEA`.
-    - **v0.1.2** (18/11/2026, la última): el destino se queda sin conexión durante la copia y la
+    - **v0.1.2** (18/11/2026): el destino se queda sin conexión durante la copia y la
       verificación, y el diagnóstico apunta a un montaje del clon si falla fuera de la tabla.
+    - **v0.1.3** (19/11/2026, la última,
+      https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.3): aviso destacado al terminar un
+      clon que se deja sin conexión y «Reparar el arranque» (interfaz y CLI `repair-boot`),
+      probado por el usuario en un clon real que no arrancaba y que, reparado, arrancó.
   - **Web** en GitHub Pages desde `docs/` (rama `main`): https://changli-ai.github.io/ClonDisk/.
     Una sola página en español (`index.html`, CSS propio, modo oscuro, adaptable al móvil) pensada
     para búsquedas como «clonar discos», «clonar disco duro a SSD» y «migrar Windows a SSD»: datos
@@ -474,8 +486,35 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
       copia y la verificación; vuelve a estar en línea al terminar si el clon tiene identificadores
       nuevos o hay que montarlo para rematarlo, y si el clonado falla o se cancela. Con los
       identificadores del origen se queda sin conexión. 190 pruebas unitarias (una simula a Windows
-      escribiendo en el clon montado). Pendiente: que el usuario repita la prueba con la 0.1.2 y
-      arranque desde el clon.
+      escribiendo en el clon montado).
+    - **Tercer intento (18/11/2026, versión 0.1.2):** el clonado se completó y se verificó, y el
+      clon quedó sin conexión. Después el usuario lo puso en línea en Administración de discos con
+      el original conectado: Windows le cambió los identificadores para resolver el choque y, al
+      arrancar desde él, salió el error 0xc000000e (su BCD buscaba la partición de Windows por los
+      identificadores antiguos). Respuesta (versión 0.1.3):
+      - Aviso destacado al terminar (`CloneResult.TargetLeftOffline`, textos en
+        `CloneText.OfflineNoticeTitle`/`OfflineNoticeSteps`): recuadro «Importante: no pongas el
+        clon en línea en este equipo» con los pasos (apagar, cambiar los discos, encender y, si no
+        arranca, reparar). La CLI lo imprime igual.
+      - **Reparar el arranque** (`Cloning/BootRepairService`, `BootRepairer`): botón «Reparar el
+        arranque…» en «Discos del equipo» (solo en discos que pueden tener un Windows: no el del
+        sistema ni el de la app, con tabla, partición de datos y, en GPT, partición EFI) y
+        `clondisk-cli repair-boot <disco>` (pide escribir REPARAR). Pone el disco en línea si hace
+        falta, espera sus volúmenes, busca su Windows, lee **ya en línea** la identidad actual de
+        esa partición, traduce en su registro el valor de `\DosDevices\C:` a esa identidad
+        (`ITargetFinisher.RepairBootInPlace`) y ejecuta `bcdboot` en modo UEFI (EFI) o BIOS
+        (partición activa). Registro propio («reparacion-…»). Probado con dobles (196 pruebas
+        unitarias).
+      - **Primera prueba real (19/11/2026):** falló con «No hay ninguna letra de unidad libre para
+        montar el clon», un mensaje engañoso: había letras libres, pero `SetVolumeMountPoint` no
+        dejaba dar letra a la partición EFI del clon. `MountWithLetter` (en `TargetFinisher`) usa
+        ahora, por orden: la letra que ya tenga el volumen (sin quitarla después), una libre con
+        `SetVolumeMountPoint` y, si Windows no lo deja, `diskpart` («select disk / select partition
+        / assign letter», buscando disco y partición en el inventario), quitándola al terminar; si
+        todo falla, el mensaje da el error real de Windows. Prueba de integración nueva,
+        `MountLetterTests` (VHD con partición EFI FAT32 y otra NTFS, `VirtualDisk.CreateWithEfi`):
+        ambas reciben una letra temporal y se les quita. **Segunda prueba real:** el arranque se
+        reparó y el clon arrancó Windows con los archivos del original.
   - Conversión (`StyleConversion`, `CloneOptions.TargetStyle`): siempre con identificadores
     nuevos y particiones alineadas a 1 MiB. A MBR: como mucho 4 particiones, se descarta la MSR,
     el código de arranque es propio (`PartitionTables/MbrBootCode`: busca la partición activa, lee
