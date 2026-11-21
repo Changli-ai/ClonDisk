@@ -110,6 +110,12 @@ internal sealed class VssSnapshotSet : IDisposable
         }
     }
 
+    /// <summary>
+    /// Cuándo se liberó la última instantánea en este proceso. Quitar un volumen poco después de
+    /// liberar una instantánea suya puede bloquear el equipo (carrera de volsnap).
+    /// </summary>
+    public static DateTime? LastReleasedUtc { get; private set; }
+
     public void Dispose()
     {
         if (_backup is null)
@@ -124,6 +130,7 @@ internal sealed class VssSnapshotSet : IDisposable
 
         Marshal.FinalReleaseComObject(_backup);
         _backup = null;
+        LastReleasedUtc = DateTime.UtcNow;
     }
 
     private static unsafe List<(string Volume, Guid Id)> StartSet(IVssBackupComponents backup, IReadOnlyList<string> volumePaths)

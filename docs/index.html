@@ -32,13 +32,17 @@
     "description": "Programa gratis y de código abierto para clonar discos duros y SSD en Windows 10 y 11, incluido el disco del sistema en uso.",
     "applicationCategory": "UtilitiesApplication",
     "operatingSystem": "Windows 10, Windows 11",
-    "softwareVersion": "0.1.3",
+    "softwareVersion": "0.1.4",
     "inLanguage": "es",
     "license": "https://www.gnu.org/licenses/gpl-3.0.html",
     "url": "https://changli-ai.github.io/ClonDisk/",
     "downloadUrl": "https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip",
     "codeRepository": "https://github.com/Changli-ai/ClonDisk",
-    "screenshot": "https://changli-ai.github.io/ClonDisk/assets/captura-principal.png",
+    "screenshot": [
+      "https://changli-ai.github.io/ClonDisk/assets/captura-principal.png",
+      "https://changli-ai.github.io/ClonDisk/assets/captura-sistema.png",
+      "https://changli-ai.github.io/ClonDisk/assets/captura-confirmacion.png"
+    ],
     "isAccessibleForFree": true,
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
     "author": { "@type": "Person", "name": "Changli-ai", "url": "https://github.com/Changli-ai" }
@@ -67,152 +71,239 @@
     :root {
       --azul: #1f5fd6;
       --azul-oscuro: #1648a8;
+      --azul-vivo: #3b86f2;
       --azul-claro: #e8f0fe;
       --verde: #1e9e5a;
+      --verde-vivo: #3dd68c;
+      --verde-claro: #e6f6ee;
+      --ambar-claro: #fff4dc;
       --texto: #1b2333;
       --suave: #556179;
       --fondo: #ffffff;
       --fondo-alt: #f3f6fb;
+      --tarjeta: #ffffff;
       --borde: #dbe3ef;
       --aviso: #fff6e0;
       --aviso-borde: #f0c96b;
-      --sombra: 0 10px 30px rgba(20, 50, 110, .12);
+      --sombra: 0 1px 2px rgba(20, 40, 80, .05), 0 14px 34px rgba(20, 40, 80, .08);
+      --sombra-fuerte: 0 30px 80px rgba(20, 50, 110, .22);
+      --rejilla: rgba(31, 95, 214, .06);
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --azul: #5b8ff0;
         --azul-oscuro: #3f74dc;
+        --azul-vivo: #7aa7f5;
         --azul-claro: #1b2a45;
         --verde: #3cc47c;
+        --verde-vivo: #5fe0a0;
+        --verde-claro: #16302a;
+        --ambar-claro: #33290f;
         --texto: #e6ebf5;
         --suave: #a3aec4;
         --fondo: #0f1522;
-        --fondo-alt: #151d2e;
+        --fondo-alt: #131b2b;
+        --tarjeta: #172033;
         --borde: #26324a;
         --aviso: #2d2615;
         --aviso-borde: #7a6326;
-        --sombra: 0 10px 30px rgba(0, 0, 0, .4);
+        --sombra: 0 14px 34px rgba(0, 0, 0, .35);
+        --sombra-fuerte: 0 30px 80px rgba(0, 0, 0, .5);
+        --rejilla: rgba(122, 167, 245, .07);
       }
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
       color: var(--texto);
       background: var(--fondo);
       line-height: 1.6;
       font-size: 17px;
     }
+    h1, h2, h3 { font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
     a { color: var(--azul); }
     img { max-width: 100%; height: auto; display: block; }
-    .contenedor { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+    code { font-size: .92em; background: var(--fondo-alt); padding: 1px 6px; border-radius: 6px; }
+    .contenedor { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
 
-    /* Cabecera */
+    /* Cabecera fija con desenfoque */
     header.barra {
       position: sticky; top: 0; z-index: 10;
-      background: color-mix(in srgb, var(--fondo) 88%, transparent);
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--borde);
+      background: color-mix(in srgb, var(--fondo) 78%, transparent);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid color-mix(in srgb, var(--borde) 70%, transparent);
     }
-    .barra .contenedor { display: flex; align-items: center; gap: 24px; height: 64px; }
-    .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; color: var(--texto); text-decoration: none; }
-    .marca img { width: 34px; height: 34px; }
-    nav.menu { display: flex; gap: 22px; margin-left: auto; align-items: center; }
-    nav.menu a { color: var(--suave); text-decoration: none; font-size: 15px; }
+    .barra .contenedor { display: flex; align-items: center; gap: 24px; height: 68px; }
+    .marca { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 20px; color: var(--texto); text-decoration: none; }
+    .marca img { width: 36px; height: 36px; border-radius: 10px; }
+    nav.menu { display: flex; gap: 26px; margin-left: auto; align-items: center; }
+    nav.menu a { color: var(--suave); text-decoration: none; font-size: 15px; font-weight: 500; }
     nav.menu a:hover { color: var(--texto); }
     .boton {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 12px 22px; border-radius: 10px; font-weight: 600; text-decoration: none;
-      border: 1px solid transparent; transition: transform .1s, background .2s;
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 12px 22px; border-radius: 12px; font-weight: 600; text-decoration: none;
+      border: 0; transition: transform .12s, box-shadow .2s, background .2s;
     }
     .boton:hover { transform: translateY(-1px); }
-    .boton.principal { background: var(--azul); color: #fff; }
-    .boton.principal:hover { background: var(--azul-oscuro); }
-    .boton.secundario { border-color: var(--borde); color: var(--texto); background: var(--fondo); }
-    nav.menu .boton { padding: 8px 16px; font-size: 15px; color: #fff; }
+    .boton.principal { color: #fff; background: linear-gradient(135deg, var(--azul), var(--azul-vivo)); box-shadow: 0 10px 24px rgba(31, 95, 214, .3); }
+    .boton.principal:hover { box-shadow: 0 14px 30px rgba(31, 95, 214, .38); }
+    .boton.secundario { color: var(--texto); background: var(--tarjeta); box-shadow: inset 0 0 0 1px var(--borde); }
+    .boton.grande { padding: 15px 26px; font-size: 17px; border-radius: 14px; }
+    nav.menu .boton { padding: 9px 18px; font-size: 15px; color: #fff; }
     .boton .logo-boton { width: 18px; height: 18px; flex: none; }
 
     /* Portada */
-    .portada { background: linear-gradient(180deg, var(--azul-claro), var(--fondo)); padding: 72px 0 40px; text-align: center; }
-    .portada h1 { font-size: clamp(34px, 5vw, 56px); line-height: 1.12; margin: 0 0 18px; letter-spacing: -.5px; }
-    .portada h1 span { color: var(--azul); }
-    .portada p.lema { font-size: clamp(18px, 2.2vw, 21px); color: var(--suave); max-width: 760px; margin: 0 auto 26px; }
-    .sellos { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 30px; }
-    .sello {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 15px;
-      background: var(--fondo); border: 1px solid var(--borde);
+    .portada {
+      position: relative; overflow: hidden; text-align: center; padding: 76px 0 0;
+      background:
+        radial-gradient(700px 420px at 8% 8%, color-mix(in srgb, var(--azul-vivo) 22%, transparent), transparent 70%),
+        radial-gradient(560px 380px at 92% 20%, color-mix(in srgb, var(--verde-vivo) 22%, transparent), transparent 70%),
+        linear-gradient(180deg, var(--fondo-alt) 0%, var(--fondo) 100%);
     }
-    .sello::before { content: "✓"; color: var(--verde); font-weight: 800; }
-    .acciones { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .portada::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background-image: linear-gradient(var(--rejilla) 1px, transparent 1px), linear-gradient(90deg, var(--rejilla) 1px, transparent 1px);
+      background-size: 48px 48px;
+      -webkit-mask-image: radial-gradient(800px 420px at 50% 18%, #000 30%, transparent 75%);
+      mask-image: radial-gradient(800px 420px at 50% 18%, #000 30%, transparent 75%);
+    }
+    .portada .contenedor { position: relative; }
+    .novedad {
+      display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px;
+      background: var(--tarjeta); box-shadow: 0 0 0 1px var(--borde), 0 6px 18px rgba(20, 50, 110, .06);
+      font-size: 14px; color: var(--suave); text-decoration: none;
+    }
+    .novedad b { color: #fff; background: var(--verde); padding: 2px 10px; border-radius: 999px; font-size: 12px; }
+    .portada h1 { font-size: clamp(34px, 4.8vw, 58px); line-height: 1.08; letter-spacing: -1.5px; font-weight: 800; margin: 22px auto 18px; max-width: 1100px; }
+    .portada h1 .degradado {
+      background: linear-gradient(90deg, var(--azul), var(--azul-vivo) 45%, var(--verde) 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .portada p.lema { font-size: clamp(18px, 2.2vw, 21px); color: var(--suave); max-width: 760px; margin: 0 auto 30px; }
+    .acciones { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
     .nota-version { font-size: 14px; color: var(--suave); margin-top: 14px; }
-    .captura {
-      margin: 46px auto 0; max-width: 980px; border-radius: 14px; overflow: hidden;
-      box-shadow: var(--sombra); border: 1px solid var(--borde);
+    .sellos { display: flex; justify-content: center; gap: 10px 24px; flex-wrap: wrap; margin-top: 22px; font-size: 15px; font-weight: 600; }
+    .sellos span { display: inline-flex; align-items: center; gap: 8px; }
+    .sellos svg { width: 18px; height: 18px; color: var(--verde); flex: none; }
+    .captura-portada {
+      margin: 54px auto 0; max-width: 1080px; border-radius: 20px 20px 0 0; overflow: hidden;
+      box-shadow: var(--sombra-fuerte), 0 0 0 1px var(--borde);
     }
 
     /* Secciones */
-    section { padding: 72px 0; }
+    section { padding: 88px 0; }
     section.alt { background: var(--fondo-alt); }
-    h2 { font-size: clamp(28px, 3.4vw, 38px); margin: 0 0 12px; letter-spacing: -.3px; }
-    .intro { color: var(--suave); max-width: 760px; margin: 0 0 36px; font-size: 18px; }
-    .rejilla { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-    .tarjeta {
-      background: var(--fondo); border: 1px solid var(--borde); border-radius: 14px; padding: 22px;
-    }
-    section.alt .tarjeta { background: var(--fondo); }
-    .tarjeta h3 { margin: 10px 0 6px; font-size: 19px; }
-    .tarjeta p { margin: 0; color: var(--suave); font-size: 16px; }
-    .icono {
-      width: 44px; height: 44px; border-radius: 11px; display: grid; place-items: center;
-      background: var(--azul-claro); color: var(--azul);
-    }
+    .titulo { text-align: center; max-width: 820px; margin: 0 auto 46px; }
+    .titulo small { color: var(--azul); font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; font-size: 13px; }
+    h2 { font-size: clamp(30px, 3.6vw, 42px); line-height: 1.15; margin: 8px 0 12px; letter-spacing: -.8px; }
+    .titulo p { color: var(--suave); font-size: 18px; margin: 0; }
+    .rejilla { display: grid; gap: 18px; grid-template-columns: repeat(3, 1fr); }
+    .tarjeta { background: var(--tarjeta); border-radius: 20px; padding: 26px; box-shadow: 0 0 0 1px var(--borde); }
+    .tarjeta h3 { margin: 16px 0 6px; font-size: 18px; }
+    .tarjeta p { margin: 0; color: var(--suave); font-size: 15.5px; }
+    .icono { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--azul-claro); color: var(--azul); }
+    .icono.verde { background: var(--verde-claro); color: var(--verde); }
+    .icono.ambar { background: var(--ambar-claro); color: #b07a00; }
     .icono svg { width: 24px; height: 24px; }
 
-    .dos { display: grid; gap: 40px; grid-template-columns: 1fr 1fr; align-items: center; }
-    .dos .captura { margin: 0; }
+    .caracteristicas { display: grid; gap: 18px; grid-template-columns: repeat(4, 1fr); }
+    .destacada {
+      grid-column: span 2; grid-row: span 2; color: #fff; position: relative; overflow: hidden;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      background: radial-gradient(360px 220px at 100% 100%, rgba(61, 214, 140, .35), transparent 70%), linear-gradient(140deg, var(--azul), var(--azul-vivo));
+      box-shadow: 0 18px 40px rgba(31, 95, 214, .3);
+    }
+    .destacada p { color: rgba(255, 255, 255, .88); max-width: 360px; }
+    .destacada .icono { background: rgba(255, 255, 255, .18); color: #fff; }
+    .destacada h3 { font-size: 24px; }
+    .destacada .discos { position: absolute; top: 28px; right: 28px; width: 150px; opacity: .95; }
+
+    /* Galería de capturas */
+    .galeria { display: grid; gap: 22px; grid-template-columns: repeat(3, 1fr); }
+    .galeria figure { margin: 0; background: var(--tarjeta); border-radius: 20px; padding: 14px; box-shadow: 0 0 0 1px var(--borde); }
+    .galeria .marco {
+      aspect-ratio: 16 / 11; border-radius: 14px; display: grid; place-items: center; overflow: hidden;
+      background: radial-gradient(260px 180px at 20% 0%, color-mix(in srgb, var(--azul-vivo) 18%, transparent), transparent 70%), var(--fondo-alt);
+    }
+    .galeria .marco { padding: 10px; }
+    .galeria .marco img { width: 100%; height: 100%; object-fit: contain; }
+    .galeria figcaption { padding: 14px 6px 4px; }
+    .galeria figcaption strong { display: block; font-size: 16px; }
+    .galeria figcaption span { color: var(--suave); font-size: 14.5px; }
+
+    .dos { display: grid; gap: 48px; grid-template-columns: 1fr 1fr; align-items: center; }
+    .dos h2 { text-align: left; }
+    .captura { border-radius: 18px; overflow: hidden; box-shadow: var(--sombra-fuerte), 0 0 0 1px var(--borde); }
     ul.lista { padding: 0; margin: 0; list-style: none; }
-    ul.lista li { padding: 8px 0 8px 32px; position: relative; }
+    ul.lista li { padding: 9px 0 9px 36px; position: relative; color: var(--suave); }
+    ul.lista li strong { color: var(--texto); }
     ul.lista li::before {
-      content: ""; position: absolute; left: 0; top: 13px; width: 20px; height: 20px; border-radius: 50%;
+      content: ""; position: absolute; left: 0; top: 13px; width: 22px; height: 22px; border-radius: 8px;
       background: var(--verde) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10.5l3 3 7-7' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
     }
 
-    ol.pasos { counter-reset: paso; list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
-    ol.pasos li { counter-increment: paso; background: var(--fondo); border: 1px solid var(--borde); border-radius: 14px; padding: 22px; }
+    ol.pasos { counter-reset: paso; list-style: none; padding: 0; margin: 0; display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    ol.pasos li { counter-increment: paso; background: var(--tarjeta); border-radius: 20px; padding: 26px; box-shadow: var(--sombra); }
     ol.pasos li::before {
-      content: counter(paso); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
-      background: var(--azul); color: #fff; font-weight: 700; margin-bottom: 10px;
+      content: counter(paso); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--azul), var(--azul-vivo)); color: #fff; font-weight: 800; margin-bottom: 16px;
     }
-    ol.pasos strong { display: block; margin-bottom: 4px; }
-    ol.pasos span { color: var(--suave); font-size: 16px; }
+    ol.pasos li:last-child::before { background: linear-gradient(135deg, var(--verde-vivo), var(--verde)); }
+    ol.pasos strong { display: block; margin-bottom: 4px; font-size: 18px; }
+    ol.pasos span { color: var(--suave); font-size: 15.5px; }
 
-    .aviso { background: var(--aviso); border: 1px solid var(--aviso-borde); border-radius: 12px; padding: 16px 20px; }
+    .consejo { display: flex; gap: 16px; align-items: flex-start; background: var(--tarjeta); border-radius: 20px; padding: 24px; box-shadow: var(--sombra); }
+    .consejo h3 { margin: 0 0 6px; font-size: 19px; }
+    .consejo p { margin: 0; color: var(--suave); }
 
-    details { background: var(--fondo); border: 1px solid var(--borde); border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
-    details summary { font-weight: 600; cursor: pointer; font-size: 18px; }
-    details p { color: var(--suave); margin: 10px 0 0; }
+    .aviso { background: var(--aviso); border: 1px solid var(--aviso-borde); border-radius: 16px; padding: 18px 22px; }
 
-    table.req { border-collapse: collapse; width: 100%; background: var(--fondo); border-radius: 12px; overflow: hidden; border: 1px solid var(--borde); }
-    table.req th, table.req td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+    .descarga { display: grid; gap: 28px; grid-template-columns: 1.1fr .9fr; align-items: start; }
+    table.req { border-collapse: separate; border-spacing: 0; width: 100%; background: var(--tarjeta); border-radius: 20px; overflow: hidden; box-shadow: 0 0 0 1px var(--borde); }
+    table.req th, table.req td { text-align: left; padding: 14px 20px; border-bottom: 1px solid var(--borde); vertical-align: top; }
     table.req th { width: 34%; color: var(--suave); font-weight: 600; }
     table.req tr:last-child th, table.req tr:last-child td { border-bottom: 0; }
 
-    .final { text-align: center; background: linear-gradient(135deg, var(--azul), var(--azul-oscuro)); color: #fff; }
-    .final h2 { color: #fff; }
-    .final p { color: rgba(255, 255, 255, .88); max-width: 680px; margin: 0 auto 26px; font-size: 18px; }
-    .final .boton.principal { background: #fff; color: var(--azul-oscuro); }
-    .final .boton.secundario { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .5); }
+    details { background: var(--tarjeta); border-radius: 16px; padding: 18px 22px; margin-bottom: 12px; box-shadow: 0 0 0 1px var(--borde); }
+    details[open] { box-shadow: 0 0 0 1px var(--borde), var(--sombra); }
+    details summary { font-weight: 600; cursor: pointer; font-size: 18px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::after { content: "+"; color: var(--azul); font-size: 22px; line-height: 1; }
+    details[open] summary::after { content: "–"; }
+    details p { color: var(--suave); margin: 10px 0 0; }
+    .preguntas { max-width: 860px; margin: 0 auto; }
 
-    footer { padding: 32px 0; color: var(--suave); font-size: 15px; border-top: 1px solid var(--borde); }
+    .final {
+      border-radius: 28px; padding: 56px; display: flex; align-items: center; justify-content: space-between; gap: 28px; color: #fff;
+      background: radial-gradient(520px 300px at 92% 0%, rgba(61, 214, 140, .45), transparent 70%), linear-gradient(135deg, #1648a8, #1f5fd6 55%, #3b86f2);
+      box-shadow: 0 24px 60px rgba(22, 72, 168, .3);
+    }
+    .final h2 { color: #fff; margin: 0 0 6px; }
+    .final p { color: rgba(255, 255, 255, .88); margin: 0; font-size: 18px; }
+    .final .acciones { flex: none; }
+    .final .boton.principal { background: #fff; color: #1648a8; box-shadow: 0 10px 24px rgba(0, 0, 0, .18); }
+    .final .boton.secundario { background: transparent; color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5); }
+
+    footer { padding: 30px 0 40px; color: var(--suave); font-size: 15px; border-top: 1px solid var(--borde); }
     footer .contenedor { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
+    @media (max-width: 980px) {
+      .caracteristicas, .rejilla, .galeria { grid-template-columns: 1fr 1fr; }
+      .destacada { grid-row: auto; }
+      .dos, .descarga { grid-template-columns: 1fr; }
+      .final { flex-direction: column; align-items: flex-start; padding: 40px 28px; }
+    }
     @media (max-width: 820px) {
       nav.menu a:not(.boton) { display: none; }
-      .dos { grid-template-columns: 1fr; }
-      section { padding: 54px 0; }
+      section { padding: 60px 0; }
       .portada { padding-top: 48px; }
+    }
+    @media (max-width: 560px) {
+      .caracteristicas, .rejilla, .galeria { grid-template-columns: 1fr; }
+      .destacada { grid-column: auto; }
+      .boton.grande { width: 100%; justify-content: center; }
     }
   </style>
 </head>
@@ -221,11 +312,12 @@
 <header class="barra">
   <div class="contenedor">
     <a class="marca" href="#inicio" aria-label="ClonDisk, inicio">
-      <img src="assets/logo.png" alt="" width="34" height="34">ClonDisk
+      <img src="assets/logo.png" alt="" width="36" height="36">ClonDisk
     </a>
     <nav class="menu" aria-label="Secciones">
       <a href="#usos">Para qué sirve</a>
       <a href="#caracteristicas">Características</a>
+      <a href="#capturas">Capturas</a>
       <a href="#como-clonar">Cómo clonar</a>
       <a href="#preguntas">Preguntas</a>
       <a href="https://github.com/Changli-ai/ClonDisk">GitHub</a>
@@ -237,40 +329,41 @@
 <main id="inicio">
   <div class="portada">
     <div class="contenedor">
-      <h1>Clonar discos gratis en Windows,<br><span>del HDD al SSD sin reinstalar</span></h1>
+      <a class="novedad" href="#seguridad"><b>Nuevo</b> Versión 0.1.4: los discos que necesita tu equipo, protegidos con candado</a>
+      <h1>Clona tu disco gratis.<br><span class="degradado">Cambias el disco y todo sigue igual.</span></h1>
       <p class="lema">
         ClonDisk copia un disco duro o un SSD entero a otro disco, incluido el disco donde está
-        Windows mientras lo usas. Cambias el disco, arrancas y todo sigue igual: tus archivos,
-        programas y ajustes.
+        Windows mientras lo usas. Migra Windows a un SSD sin reinstalar: tus archivos, programas y
+        ajustes siguen igual.
       </p>
-      <div class="sellos">
-        <span class="sello">Gratis</span>
-        <span class="sello">Sin anuncios</span>
-        <span class="sello">Código abierto</span>
-        <span class="sello">Sin registro ni telemetría</span>
-      </div>
       <div class="acciones">
-        <a class="boton principal" href="https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip">
+        <a class="boton principal grande" href="https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip">
           <svg class="logo-boton" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="2" width="9.5" height="9.5"/><rect x="12.5" y="2" width="9.5" height="9.5"/><rect x="2" y="12.5" width="9.5" height="9.5"/><rect x="12.5" y="12.5" width="9.5" height="9.5"/></svg>
           Descargar para Windows
         </a>
-        <a class="boton secundario" href="https://github.com/Changli-ai/ClonDisk"><svg class="logo-boton" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Ver el código en GitHub</a>
+        <a class="boton secundario grande" href="#como-clonar">Ver cómo funciona</a>
       </div>
-      <p class="nota-version">Versión 0.1.3 de prueba · Windows 10 y 11 de 64 bits · No requiere instalación</p>
-      <div class="captura">
-        <img src="assets/captura-principal.png" width="1265" height="762"
-             alt="Ventana principal de ClonDisk para clonar un disco: tarjetas de disco de origen y de destino unidas por una flecha">
+      <p class="nota-version">Versión 0.1.4 de prueba · Windows 10 y 11 de 64 bits · No requiere instalación</p>
+      <div class="sellos">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Gratis para siempre</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Sin anuncios ni registro</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Sin telemetría</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Código abierto (GPL-3.0)</span>
+      </div>
+      <div class="captura-portada">
+        <img src="assets/captura-principal.png" width="1600" height="1025"
+             alt="Ventana principal de ClonDisk para clonar un disco: tarjeta del disco de origen con sus particiones y tarjeta del destino con los discos disponibles">
       </div>
     </div>
   </div>
 
   <section id="usos">
     <div class="contenedor">
-      <h2>¿Para qué sirve clonar un disco?</h2>
-      <p class="intro">
-        Clonar un disco es hacer una copia exacta de todo su contenido, particiones incluidas, en
-        otro disco. Así puedes cambiar de disco sin volver a instalar Windows ni tus programas.
-      </p>
+      <div class="titulo">
+        <small>Para qué sirve</small>
+        <h2>¿Para qué sirve clonar un disco?</h2>
+        <p>Clonar un disco es hacer una copia exacta de todo su contenido, particiones incluidas, en otro disco. Así cambias de disco sin volver a instalar Windows ni tus programas.</p>
+      </div>
       <div class="rejilla">
         <article class="tarjeta">
           <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg></div>
@@ -278,7 +371,7 @@
           <p>Pasa tu Windows de un disco duro lento a un SSD (SATA, M.2 o NVMe) sin reinstalar y nota la diferencia al arrancar.</p>
         </article>
         <article class="tarjeta">
-          <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+          <div class="icono verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
           <h3>Ampliar el disco</h3>
           <p>Clona a un disco más grande y amplía la partición principal o reparte el espacio libre entre tus particiones.</p>
         </article>
@@ -288,7 +381,7 @@
           <p>Si tus datos caben, ClonDisk reduce las particiones para que todo entre en un SSD de menor capacidad.</p>
         </article>
         <article class="tarjeta">
-          <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"/></svg></div>
+          <div class="icono verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3"/></svg></div>
           <h3>Cambiar entre BIOS y UEFI</h3>
           <p>Convierte la tabla de particiones del clon entre MBR y GPT y rehace el arranque de Windows para el modo que necesites.</p>
         </article>
@@ -298,7 +391,7 @@
           <p>Guarda un clon completo listo para sustituir al original si falla, sin restaurar copias de seguridad.</p>
         </article>
         <article class="tarjeta">
-          <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 12h6M17 12h.01"/></svg></div>
+          <div class="icono verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 12h6M17 12h.01"/></svg></div>
           <h3>Clonar discos de datos</h3>
           <p>Copia discos internos o externos por USB, entre HDD y SSD en cualquier combinación.</p>
         </article>
@@ -308,123 +401,198 @@
 
   <section id="caracteristicas" class="alt">
     <div class="contenedor">
-      <h2>Características</h2>
-      <p class="intro">Todo lo necesario para clonar un disco de forma segura, sin pagar y sin publicidad.</p>
-      <div class="rejilla">
-        <article class="tarjeta">
-          <h3>Clona Windows en marcha</h3>
-          <p>Copia el disco del sistema mientras lo usas gracias a las instantáneas VSS de Windows. No necesitas reiniciar ni arrancar desde un USB.</p>
+      <div class="titulo">
+        <small>Características</small>
+        <h2>Todo lo necesario para cambiar de disco</h2>
+        <p>Clonado seguro, sin pagar y sin publicidad.</p>
+      </div>
+      <div class="caracteristicas">
+        <article class="tarjeta destacada">
+          <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2.5"/><path d="M9 20h6M12 16v4"/></svg></div>
+          <svg class="discos" viewBox="0 0 150 100" fill="none" aria-hidden="true"><rect x="4" y="14" width="108" height="64" rx="16" fill="#fff" opacity=".28"/><rect x="36" y="32" width="110" height="64" rx="16" fill="#fff"/><rect x="54" y="72" width="40" height="8" rx="4" fill="#1f5fd6"/><circle cx="126" cy="76" r="6" fill="#1e9e5a"/></svg>
+          <h3>Clona Windows mientras lo usas</h3>
+          <p>Copia el disco del sistema en marcha gracias a las instantáneas VSS de Windows. No necesitas reiniciar ni arrancar desde un USB.</p>
         </article>
         <article class="tarjeta">
+          <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg></div>
           <h3>Copia inteligente</h3>
-          <p>Solo copia los bloques en uso: un disco de 1 TB con 350 GB ocupados copia unos 350 GB. También ofrece copia sector a sector.</p>
+          <p>Solo copia los bloques en uso: un disco de 1 TB con 350 GB ocupados copia unos 350 GB. También hay copia sector a sector.</p>
         </article>
         <article class="tarjeta">
+          <div class="icono verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8h16M4 16h10M17 13l3 3-3 3"/></svg></div>
           <h3>Ajusta las particiones</h3>
-          <p>Amplía, reparte o reduce el espacio según el tamaño del disco nuevo, y alinea las particiones a 1 MiB en los SSD.</p>
+          <p>Amplía, reparte o reduce el espacio según el disco nuevo, y alinea las particiones a 1 MiB en los SSD.</p>
         </article>
         <article class="tarjeta">
-          <h3>MBR y GPT</h3>
-          <p>Convierte la tabla del clon entre MBR (BIOS) y GPT (UEFI), crea la partición EFI si hace falta y rehace el arranque.</p>
+          <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+          <h3>Discos protegidos</h3>
+          <p>El disco de tu Windows y el de su arranque llevan candado: ClonDisk nunca los usa como destino.</p>
         </article>
         <article class="tarjeta">
+          <div class="icono verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
           <h3>Verificación al terminar</h3>
-          <p>Relee el disco de destino y lo compara bloque a bloque con lo copiado para confirmar que el clon es correcto.</p>
+          <p>Relee el disco de destino y lo compara bloque a bloque con lo copiado.</p>
         </article>
         <article class="tarjeta">
-          <h3>Progreso claro</h3>
-          <p>Porcentaje, velocidad, tiempo restante y lo que se está copiando en cada momento. Puedes cancelar cuando quieras.</p>
+          <div class="icono ambar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg></div>
+          <h3>Reparar el arranque</h3>
+          <p>Si un clon no arranca (error 0xc000000e), ClonDisk rehace su arranque sin borrar datos.</p>
         </article>
         <article class="tarjeta">
-          <h3>Registro detallado</h3>
-          <p>Cada clonado deja un registro con todo lo que se hizo, que puedes exportar o consultar si algo falla.</p>
+          <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></div>
+          <h3>Limpiar y formatear</h3>
+          <p>Deja como nuevo un disco que tuvo Windows, para que el equipo no intente arrancar desde él.</p>
         </article>
         <article class="tarjeta">
+          <div class="icono verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
           <h3>Interfaz y línea de comandos</h3>
-          <p>Una interfaz sencilla en español y una línea de comandos (<code>clondisk-cli</code>) para automatizar clonados.</p>
+          <p>Interfaz en español y línea de comandos (<code>clondisk-cli</code>) para automatizar clonados.</p>
+        </article>
+        <article class="tarjeta">
+          <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></div>
+          <h3>Registro detallado</h3>
+          <p>Cada operación deja un registro con todo lo que se hizo, que puedes exportar si algo falla.</p>
         </article>
       </div>
     </div>
   </section>
 
-  <section id="seguridad">
+  <section id="capturas">
+    <div class="contenedor">
+      <div class="titulo">
+        <small>Capturas</small>
+        <h2>Así es ClonDisk</h2>
+        <p>Una interfaz moderna y en español: eliges los discos, revisas lo que va a pasar y clonas.</p>
+      </div>
+      <div class="galeria">
+        <figure>
+          <div class="marco"><img src="assets/captura-sistema.png" width="1600" height="1025" loading="lazy"
+               alt="Migrar el sistema en ClonDisk: el Windows en uso ya elegido como origen y los discos disponibles como destino"></div>
+          <figcaption><strong>Migrar el sistema</strong><span>El Windows en uso ya viene elegido; solo eliges el disco nuevo.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="marco"><img src="assets/captura-selector.png" width="750" height="625" loading="lazy"
+               alt="Selector de discos de ClonDisk con los discos protegidos con candado y desactivados"></div>
+          <figcaption><strong>Discos protegidos</strong><span>El disco de Windows y el de su arranque salen con candado y no se pueden elegir.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="marco"><img src="assets/captura-opciones.png" width="1075" height="925" loading="lazy"
+               alt="Opciones del clonado en ClonDisk: modo de copia, verificación, espacio sobrante y tabla de particiones"></div>
+          <figcaption><strong>Opciones del clonado</strong><span>Copia inteligente o sector a sector, verificación y uso del espacio.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="marco"><img src="assets/captura-resultado.png" width="1075" height="925" loading="lazy"
+               alt="Resultado de un clonado en ClonDisk: completado y verificado, con los pasos para arrancar desde el clon"></div>
+          <figcaption><strong>Resultado claro</strong><span>Te dice si el clon se verificó y qué hacer para arrancar desde él.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="marco"><img src="assets/captura-discos.png" width="1600" height="1025" loading="lazy"
+               alt="Discos del equipo en ClonDisk: lista de discos, datos del disco elegido y su mapa de particiones"></div>
+          <figcaption><strong>Discos del equipo</strong><span>Modelo, serie, salud y particiones de cada disco, en solo lectura.</span></figcaption>
+        </figure>
+        <figure>
+          <div class="marco"><img src="assets/captura-limpiar.png" width="685" height="310" loading="lazy"
+               alt="Confirmación de Limpiar y formatear en ClonDisk con la lista de particiones que se borrarán"></div>
+          <figcaption><strong>Limpiar y formatear</strong><span>Deja como nuevo un disco que tuvo Windows, siempre con confirmación.</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="seguridad" class="alt">
     <div class="contenedor dos">
       <div>
-        <h2>Tus datos, a salvo</h2>
-        <p class="intro">Clonar sobrescribe el disco de destino, así que ClonDisk está pensado para que no haya sorpresas.</p>
+        <div class="titulo" style="text-align: left; margin: 0 0 24px;">
+          <small>Seguridad</small>
+          <h2>Tus datos, a salvo</h2>
+          <p>Clonar sobrescribe el disco de destino, así que ClonDisk está pensado para que no haya sorpresas.</p>
+        </div>
         <ul class="lista">
           <li><strong>El disco de origen nunca se modifica:</strong> se abre siempre en solo lectura.</li>
           <li><strong>Te enseña todo lo que se va a borrar</strong> en el destino y pide tu confirmación antes de escribir.</li>
-          <li><strong>No te deja elegir un destino peligroso,</strong> como el disco del sistema en uso o el propio origen.</li>
+          <li><strong>Los discos que necesita tu equipo llevan candado:</strong> el de Windows, el de su arranque y el propio origen no se pueden elegir como destino.</li>
           <li><strong>Identifica los discos por su número de serie</strong> y lo vuelve a comprobar justo antes de escribir.</li>
           <li><strong>Un clon interrumpido no parece válido:</strong> si cancelas o falla, el destino queda sin tabla de particiones.</li>
         </ul>
       </div>
       <div class="captura">
-        <img src="assets/captura-confirmacion.png" width="757" height="546" loading="lazy"
+        <img src="assets/captura-confirmacion.png" width="1075" height="925" loading="lazy"
              alt="Pantalla de confirmación de ClonDisk con el origen, el destino y la lista de particiones que se borrarán">
       </div>
     </div>
   </section>
 
-  <section id="como-clonar" class="alt">
+  <section id="como-clonar">
     <div class="contenedor">
-      <h2>Cómo clonar un disco duro a un SSD con ClonDisk</h2>
-      <p class="intro">Conecta el disco nuevo (por dentro o con un adaptador USB) y sigue estos pasos.</p>
+      <div class="titulo">
+        <small>Cómo funciona</small>
+        <h2>Cómo clonar un disco duro a un SSD con ClonDisk</h2>
+        <p>Conecta el disco nuevo (por dentro o con un adaptador USB) y sigue estos pasos.</p>
+      </div>
       <ol class="pasos">
         <li><strong>Abre ClonDisk</strong><span>Descarga el .zip, descomprímelo y abre <code>ClonDisk.exe</code>. Acepta el aviso de permisos de Windows.</span></li>
-        <li><strong>Elige origen y destino</strong><span>En «Sistema», el disco de Windows ya está elegido; solo pulsa «+» para elegir el disco nuevo.</span></li>
+        <li><strong>Elige origen y destino</strong><span>En «Sistema», el disco de Windows ya está elegido; solo elige el disco nuevo.</span></li>
         <li><strong>Revisa el plan</strong><span>Comprueba qué se copiará, cómo quedarán las particiones y qué se borrará en el disco nuevo.</span></li>
         <li><strong>Clona y cambia el disco</strong><span>Confirma y espera. Al terminar, apaga, pon el disco nuevo en lugar del antiguo y arranca.</span></li>
       </ol>
-      <div class="dos" style="margin-top: 40px;">
+      <div class="dos" style="margin-top: 48px;">
         <div class="captura">
-          <img src="assets/captura-progreso.png" width="757" height="290" loading="lazy"
+          <img src="assets/captura-progreso.png" width="1075" height="725" loading="lazy"
                alt="Progreso de un clonado en ClonDisk con porcentaje, velocidad, tiempo restante y partición en curso">
         </div>
-        <div>
-          <h3 style="font-size: 22px; margin-top: 0;">Consejo de velocidad</h3>
-          <p style="color: var(--suave);">
-            Conecta el disco nuevo por dentro del equipo (SATA o NVMe) o a un puerto USB 3.0. Por
-            USB 2.0 la copia se limita a unos 35–40 MB/s. Si el disco nuevo es igual o más grande
-            que el original, ClonDisk usa la copia por bloques, la más rápida.
-          </p>
+        <div class="consejo">
+          <div class="icono verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg></div>
+          <div>
+            <h3>Consejo de velocidad</h3>
+            <p>
+              Conecta el disco nuevo por dentro del equipo (SATA o NVMe) o a un puerto USB 3.0. Por
+              USB 2.0 la copia se limita a unos 35–40 MB/s. Si el disco nuevo es igual o más grande
+              que el original, ClonDisk usa la copia por bloques, la más rápida.
+            </p>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="descargar">
+  <section id="descargar" class="alt">
     <div class="contenedor">
-      <h2>Descargar ClonDisk</h2>
-      <p class="intro">
-        Gratis y sin instalación: descarga el .zip, descomprímelo y abre <code>ClonDisk.exe</code>.
-        Lleva todo lo necesario, sin instalar .NET aparte.
-      </p>
-      <table class="req">
-        <tr><th>Versión</th><td>0.1.3 (versión de prueba)</td></tr>
-        <tr><th>Sistema</th><td>Windows 10 (22H2) o Windows 11, de 64 bits</td></tr>
-        <tr><th>Permisos</th><td>Administrador (la aplicación los pide al abrirse)</td></tr>
-        <tr><th>Discos</th><td>HDD y SSD: SATA, M.2, NVMe y USB, con tabla MBR o GPT</td></tr>
-        <tr><th>Precio</th><td>Gratis, sin anuncios. Código abierto (GPL-3.0)</td></tr>
-      </table>
-      <div class="acciones" style="justify-content: flex-start; margin-top: 24px;">
-        <a class="boton principal" href="https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip"><svg class="logo-boton" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="2" width="9.5" height="9.5"/><rect x="12.5" y="2" width="9.5" height="9.5"/><rect x="2" y="12.5" width="9.5" height="9.5"/><rect x="12.5" y="12.5" width="9.5" height="9.5"/></svg>Descargar la última versión</a>
-        <a class="boton secundario" href="https://github.com/Changli-ai/ClonDisk/releases">Todas las versiones</a>
+      <div class="titulo">
+        <small>Descarga</small>
+        <h2>Descargar ClonDisk</h2>
+        <p>Gratis y sin instalación: descarga el .zip, descomprímelo y abre <code>ClonDisk.exe</code>. Lleva todo lo necesario, sin instalar .NET aparte.</p>
       </div>
-      <div class="aviso" style="margin-top: 28px;">
-        <strong>Antes de clonar:</strong> ClonDisk está en desarrollo. El clonado funciona y está
-        probado, pero aún se está confirmando que el clon del disco de Windows arranque en todos los
-        casos. Haz copia de lo importante y recuerda que <strong>clonar borra todo el disco de
-        destino</strong>. El ejecutable aún no está firmado: si Windows SmartScreen avisa, pulsa
-        «Más información» → «Ejecutar de todas formas».
+      <div class="descarga">
+        <table class="req">
+          <tr><th>Versión</th><td>0.1.4 (versión de prueba)</td></tr>
+          <tr><th>Sistema</th><td>Windows 10 (22H2) o Windows 11, de 64 bits</td></tr>
+          <tr><th>Permisos</th><td>Administrador (la aplicación los pide al abrirse)</td></tr>
+          <tr><th>Discos</th><td>HDD y SSD: SATA, M.2, NVMe y USB, con tabla MBR o GPT</td></tr>
+          <tr><th>Precio</th><td>Gratis, sin anuncios. Código abierto (GPL-3.0)</td></tr>
+        </table>
+        <div>
+          <div class="acciones" style="justify-content: flex-start;">
+            <a class="boton principal grande" href="https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip"><svg class="logo-boton" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="2" width="9.5" height="9.5"/><rect x="12.5" y="2" width="9.5" height="9.5"/><rect x="2" y="12.5" width="9.5" height="9.5"/><rect x="12.5" y="12.5" width="9.5" height="9.5"/></svg>Descargar la última versión</a>
+            <a class="boton secundario grande" href="https://github.com/Changli-ai/ClonDisk/releases">Todas las versiones</a>
+          </div>
+          <div class="aviso" style="margin-top: 22px;">
+            <strong>Antes de clonar:</strong> ClonDisk está en desarrollo. El clonado funciona y está
+            probado, pero aún se está confirmando que el clon del disco de Windows arranque en todos los
+            casos. Haz copia de lo importante y recuerda que <strong>clonar borra todo el disco de
+            destino</strong>. El ejecutable aún no está firmado: si Windows SmartScreen avisa, pulsa
+            «Más información» → «Ejecutar de todas formas».
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <section id="preguntas" class="alt">
-    <div class="contenedor">
-      <h2>Preguntas frecuentes</h2>
+  <section id="preguntas">
+    <div class="contenedor preguntas">
+      <div class="titulo">
+        <small>Preguntas frecuentes</small>
+        <h2>Preguntas frecuentes</h2>
+      </div>
       <details open>
         <summary>¿ClonDisk es gratis de verdad?</summary>
         <p>Sí. Es gratis, sin anuncios, sin registro, sin funciones de pago y sin telemetría: no se conecta a internet. Su código está publicado en GitHub bajo la licencia GPL-3.0, así que cualquiera puede revisarlo.</p>
@@ -456,13 +624,17 @@
     </div>
   </section>
 
-  <section class="final">
+  <section>
     <div class="contenedor">
-      <h2>Clona tu disco hoy, gratis</h2>
-      <p>Sin anuncios, sin registro y con el código a la vista. Descárgalo o colabora en GitHub.</p>
-      <div class="acciones">
-        <a class="boton principal" href="https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip"><svg class="logo-boton" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="2" width="9.5" height="9.5"/><rect x="12.5" y="2" width="9.5" height="9.5"/><rect x="2" y="12.5" width="9.5" height="9.5"/><rect x="12.5" y="12.5" width="9.5" height="9.5"/></svg>Descargar ClonDisk</a>
-        <a class="boton secundario" href="https://github.com/Changli-ai/ClonDisk"><svg class="logo-boton" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Código fuente</a>
+      <div class="final">
+        <div>
+          <h2>Clona tu disco hoy, gratis</h2>
+          <p>Sin anuncios, sin registro y con el código a la vista. Descárgalo o colabora en GitHub.</p>
+        </div>
+        <div class="acciones">
+          <a class="boton principal grande" href="https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip"><svg class="logo-boton" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="2" y="2" width="9.5" height="9.5"/><rect x="12.5" y="2" width="9.5" height="9.5"/><rect x="2" y="12.5" width="9.5" height="9.5"/><rect x="12.5" y="12.5" width="9.5" height="9.5"/></svg>Descargar ClonDisk</a>
+          <a class="boton secundario grande" href="https://github.com/Changli-ai/ClonDisk"><svg class="logo-boton" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Código fuente</a>
+        </div>
       </div>
     </div>
   </section>

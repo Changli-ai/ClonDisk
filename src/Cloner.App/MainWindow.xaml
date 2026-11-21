@@ -6,12 +6,60 @@
         Title="ClonDisk"
         Icon="Assets/ClonDisk.ico"
         Width="1280" Height="800" MinWidth="1100" MinHeight="640"
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="CenterScreen" WindowState="Maximized"
         Background="{StaticResource WindowBackground}"
         Foreground="{StaticResource TextPrimary}"
         FontFamily="Segoe UI" FontSize="13"
         UseLayoutRounding="True">
+    <!-- Barra de título propia: la de Windows 10 es blanca y no sigue el diseño. Se arrastra por la franja
+         superior y conserva el ajuste a los bordes de la pantalla y el doble clic para maximizar. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" GlassFrameThickness="0"
+                      CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
     <Window.Resources>
+        <!-- Botones de minimizar, maximizar y cerrar. -->
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="Transparent" CornerRadius="10">
+                            <TextBlock Text="{TemplateBinding Content}" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                       Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#E3E8F0" />
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CaptionCloseButton" TargetType="Button" BasedOn="{StaticResource CaptionButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="Transparent" CornerRadius="10">
+                            <TextBlock Text="{TemplateBinding Content}" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                       Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#E5484D" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <controls:NotVisibleConverter x:Key="NotVisible" />
 
@@ -41,7 +89,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Root" Background="Transparent" CornerRadius="6"
+                        <Border x:Name="Root" Background="Transparent" CornerRadius="12"
                                 BorderThickness="1" BorderBrush="Transparent">
                             <ContentPresenter />
                         </Border>
@@ -108,24 +156,109 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Cursor" Value="Hand" />
+            <!-- La selección ya marca el foco; el rectángulo punteado abarcaría también el título del grupo. -->
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Root" Background="Transparent" CornerRadius="8" Margin="0,2">
-                            <ContentPresenter />
-                        </Border>
+                        <StackPanel>
+                            <!-- Título del grupo («CLONAR», «HERRAMIENTAS»…), fuera del sombreado del elemento. -->
+                            <TextBlock Text="{Binding GroupTitle}" Foreground="#B8FFFFFF" FontSize="11" FontWeight="SemiBold"
+                                       Margin="12,14,0,8" IsHitTestVisible="False"
+                                       Visibility="{Binding StartsGroup, Converter={StaticResource BoolToVisibility}}" />
+                            <Border x:Name="Root" Background="Transparent" CornerRadius="12" Margin="0,1">
+                                <ContentPresenter />
+                            </Border>
+                        </StackPanel>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#22FFFFFF" />
+                                <Setter TargetName="Root" Property="Background" Value="#1FFFFFFF" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="#3DFFFFFF" />
+                                <Setter TargetName="Root" Property="Background" Value="White" />
+                                <Setter Property="Foreground" Value="#1C5BD6" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Cuadro grande con «+» de una tarjeta vacía. -->
+        <Style x:Key="PlusTile" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Width" Value="76" />
+            <Setter Property="Height" Value="76" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" CornerRadius="24" Background="{TemplateBinding Background}" Effect="{TemplateBinding Tag}">
+                            <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="26" Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.9" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Disco sugerido dentro de una tarjeta vacía. -->
+        <Style x:Key="SuggestionButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" CornerRadius="12" Background="{StaticResource SoftFill}" Padding="12,9">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#E9EEF6" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.62" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Botón con aspecto de enlace. -->
+        <Style x:Key="LinkButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <TextBlock x:Name="Text" Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" FontWeight="SemiBold" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Text" Property="TextDecorations" Value="Underline" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Etiqueta de candado («Windows en uso»…). -->
+        <DataTemplate x:Key="LockChip">
+            <Border Background="{StaticResource Accent}" CornerRadius="10" Padding="8,2" Margin="0,0,6,6">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="White"
+                               VerticalAlignment="Center" Margin="0,0,5,0" />
+                    <TextBlock Text="{Binding}" FontSize="11.5" FontWeight="SemiBold" Foreground="White" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
 
         <!-- Tarjeta grande de origen o destino: todo su contenido es un botón. -->
         <Style x:Key="CardButton" TargetType="Button">
@@ -169,17 +302,6 @@
             </Setter>
         </Style>
 
-        <Style x:Key="PageTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="22" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-
-        <Style x:Key="PageSubtitle" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Margin" Value="0,6,0,0" />
-        </Style>
-
         <!-- Aviso de función que todavía no está disponible. -->
         <Style x:Key="ComingSoon" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource AccentSoft}" />
@@ -190,120 +312,404 @@
 
         <!-- Tarjeta vacía con borde discontinuo y botón «+». Tag = color del botón. -->
         <DataTemplate x:Key="EmptyCard">
-            <Grid Width="300" Height="210">
-                <Rectangle RadiusX="14" RadiusY="14" Fill="{StaticResource EmptyCardFill}"
-                           Stroke="{StaticResource DashedStroke}" StrokeThickness="1.5" StrokeDashArray="5 4" />
+            <Grid Width="320" Height="230">
+                <Rectangle RadiusX="18" RadiusY="18" Fill="{StaticResource EmptyCardFill}"
+                           Stroke="{StaticResource DashedStroke}" StrokeThickness="2" StrokeDashArray="4 3" />
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Border Width="52" Height="52" CornerRadius="12" Background="{Binding Tile}" HorizontalAlignment="Center">
-                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="20" Foreground="White"
+                    <Border Width="64" Height="64" CornerRadius="20" Background="{Binding Tile}" HorizontalAlignment="Center">
+                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="White"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <TextBlock Text="{Binding Prompt}" Margin="0,14,0,0" HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding Prompt}" Margin="0,16,0,0" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" />
                 </StackPanel>
             </Grid>
         </DataTemplate>
 
-        <!-- Flecha discontinua entre origen y destino. -->
+        <!-- Flecha entre origen y destino: círculo con degradado de azul a verde. -->
         <DataTemplate x:Key="FlowArrow">
-            <Canvas Width="90" Height="20" VerticalAlignment="Center">
-                <Line X1="4" Y1="10" X2="76" Y2="10" Stroke="#A9B6C9" StrokeThickness="2" StrokeDashArray="1.5 2.5" StrokeDashCap="Round" />
-                <Path Data="M 74,4 L 86,10 L 74,16 Z" Fill="#A9B6C9" />
-            </Canvas>
+            <Grid Width="56" Height="56" VerticalAlignment="Center">
+                <Ellipse Fill="{StaticResource WindowBackground}" Margin="-8" />
+                <Ellipse Effect="{StaticResource AccentShadow}">
+                    <Ellipse.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#1F6FEB" Offset="0" />
+                            <GradientStop Color="#16A365" Offset="1" />
+                        </LinearGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <TextBlock Text="&#xE72A;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="White"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
         </DataTemplate>
 
-        <!-- Tarjeta con un disco o sistema elegido. -->
+        <!-- Punto y nombre del papel de la tarjeta: azul para el origen, verde para el destino. -->
+        <DataTemplate x:Key="RoleHeader">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock x:Name="Text" Text="{Binding}" Style="{StaticResource RoleLabel}" Foreground="{StaticResource Accent}" />
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding}" Value="DESTINO">
+                    <Setter TargetName="Dot" Property="Fill" Value="{StaticResource SuccessStrong}" />
+                    <Setter TargetName="Text" Property="Foreground" Value="{StaticResource SuccessStrong}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Tarjeta con un disco o sistema elegido: etiquetas, cifras, mapa de particiones y leyenda. -->
         <DataTemplate x:Key="FilledCard" DataType="{x:Type vm:CardContent}">
-            <Border Width="300" Height="210" CornerRadius="14" Background="{StaticResource AccentSoft}"
-                    BorderBrush="#B9D2FA" BorderThickness="1">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="18,0">
-                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="44"
-                               Foreground="{StaticResource Accent}" HorizontalAlignment="Center" />
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" Margin="0,12,0,0"
-                               HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding Details}" Foreground="{StaticResource TextSecondary}" FontSize="12"
-                               Margin="0,4,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
-                </StackPanel>
+            <Border Style="{StaticResource Card}" Padding="24,22">
+                <DockPanel>
+                    <ContentControl DockPanel.Dock="Top" Content="{Binding Role}" ContentTemplate="{StaticResource RoleHeader}"
+                                    Focusable="False" IsTabStop="False" />
+
+                    <Grid DockPanel.Dock="Top" Margin="0,18,40,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="Tile" Width="76" Height="76" CornerRadius="22" VerticalAlignment="Top" Margin="0,0,18,0">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#EEF4FF" Offset="0" />
+                                    <GradientStop Color="#DBE8FF" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <TextBlock x:Name="Glyph" Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="34"
+                                       Foreground="{StaticResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold" TextWrapping="Wrap" MaxHeight="50" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Details}" Foreground="{StaticResource TextSecondary}" Margin="0,2,0,8" TextTrimming="CharacterEllipsis" />
+                            <WrapPanel>
+                                <ItemsControl ItemsSource="{Binding Chips}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{StaticResource SoftFill}" CornerRadius="10" Padding="9,2" Margin="0,0,6,6">
+                                                <TextBlock Text="{Binding}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <ContentControl Content="{Binding LockLabel}" ContentTemplate="{StaticResource LockChip}" Focusable="False" IsTabStop="False"
+                                                Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibility}}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding Stats}" Margin="0,0,0,16">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="4" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource SoftFill}" CornerRadius="12" Padding="10,8" Margin="0,0,8,0">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Label}" FontSize="11" Foreground="{StaticResource TextTertiary}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Value}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <StackPanel DockPanel.Dock="Bottom">
+                        <ItemsControl ItemsSource="{Binding Segments}" Height="40">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <controls:ProportionalPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="controls:ProportionalPanel.Weight" Value="{Binding Weight}" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{Binding Fill}" CornerRadius="8" Margin="1.5,0" Padding="8,0" ToolTip="{Binding ToolTip}">
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Label}" Foreground="{Binding Foreground}" FontSize="11.5"
+                                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding SizeText}" Foreground="{Binding Foreground}" FontSize="10.5"
+                                                       Opacity="0.85" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{Binding Footer}" Foreground="{StaticResource TextSecondary}" FontSize="12.5" Margin="0,10,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding Legend}" VerticalAlignment="Top">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="2" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,12,8">
+                                    <Border Width="10" Height="10" CornerRadius="3" Background="{Binding Fill}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Text="{Binding Text}" FontSize="12.5" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
             </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsTarget}" Value="True">
+                    <Setter TargetName="Tile" Property="Background">
+                        <Setter.Value>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#EAFBF2" Offset="0" />
+                                <GradientStop Color="#D2F2E1" Offset="1" />
+                            </LinearGradientBrush>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter TargetName="Glyph" Property="Foreground" Value="{StaticResource SuccessStrong}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- Pantalla de copia: título, tarjetas de origen y destino, y «Siguiente». -->
+        <DataTemplate x:Key="EmptySourceCard">
+            <Grid>
+                <Rectangle RadiusX="20" RadiusY="20" Fill="#FAFCFF" Stroke="#B9D2FA" StrokeThickness="2" StrokeDashArray="4 3" />
+                <DockPanel Margin="24,22">
+                    <ContentControl DockPanel.Dock="Top" Content="ORIGEN" ContentTemplate="{StaticResource RoleHeader}"
+                                    Focusable="False" IsTabStop="False" />
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="440">
+                        <Button Style="{StaticResource PlusTile}" Background="{StaticResource AccentGradient}" Tag="{StaticResource AccentShadow}"
+                                Command="{Binding PickSourceCommand}" ToolTip="Ver todos los discos" />
+                        <TextBlock Text="Elige el disco de origen" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,18,0,0" />
+                        <TextBlock Text="El disco que se va a copiar. Solo se lee: nunca se modifica." Foreground="{StaticResource TextSecondary}" TextAlignment="Center"
+                                   TextWrapping="Wrap" Margin="0,6,0,16" />
+                        <ScrollViewer MaxHeight="236" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding SourceSuggestions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource SuggestionButton}" IsEnabled="{Binding IsSelectable}"
+                                                ToolTip="{Binding DisabledReason}" ToolTipService.ShowOnDisabled="True"
+                                                Command="{Binding DataContext.ChooseSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="&#xEDA2;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{StaticResource Accent}"
+                                                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Details}" FontSize="11.5" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="Elegir" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                           Foreground="{StaticResource Accent}"
+                                                           Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVisibility}}" />
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                            Visibility="{Binding IsSelectable, Converter={StaticResource NotVisible}}">
+                                                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="{StaticResource TextSecondary}"
+                                                               VerticalAlignment="Center" Margin="0,0,5,0" />
+                                                    <TextBlock Text="{Binding LockLabel}" FontSize="11.5" Foreground="{StaticResource TextSecondary}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <Button Content="Ver todos los discos…" Style="{StaticResource LinkButton}" Command="{Binding PickSourceCommand}"
+                                HorizontalAlignment="Center" Margin="0,4,0,0" />
+                    </StackPanel>
+                </DockPanel>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="EmptyTargetCard">
+            <Grid>
+                <Rectangle RadiusX="20" RadiusY="20" Fill="#FAFEFC" Stroke="#A9DFC2" StrokeThickness="2" StrokeDashArray="4 3" />
+                <DockPanel Margin="24,22">
+                    <ContentControl DockPanel.Dock="Top" Content="DESTINO" ContentTemplate="{StaticResource RoleHeader}"
+                                    Focusable="False" IsTabStop="False" />
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="440">
+                        <Button Style="{StaticResource PlusTile}" Background="{StaticResource SuccessGradient}" Tag="{StaticResource SuccessShadow}"
+                                Command="{Binding PickTargetCommand}" ToolTip="Ver todos los discos" />
+                        <TextBlock Text="Elige el disco de destino" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,18,0,0" />
+                        <TextBlock Text="Recibirá la copia. Todo su contenido actual se borrará antes de copiar." Foreground="{StaticResource TextSecondary}" TextAlignment="Center"
+                                   TextWrapping="Wrap" Margin="0,6,0,16" />
+                        <ScrollViewer MaxHeight="236" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding TargetSuggestions}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource SuggestionButton}" IsEnabled="{Binding IsSelectable}"
+                                                ToolTip="{Binding DisabledReason}" ToolTipService.ShowOnDisabled="True"
+                                                Command="{Binding DataContext.ChooseTargetCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="&#xEDA2;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{StaticResource SuccessStrong}"
+                                                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Details}" FontSize="11.5" Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="Elegir" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                           Foreground="{StaticResource SuccessStrong}"
+                                                           Visibility="{Binding IsSelectable, Converter={StaticResource BoolToVisibility}}" />
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                            Visibility="{Binding IsSelectable, Converter={StaticResource NotVisible}}">
+                                                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="{StaticResource TextSecondary}"
+                                                               VerticalAlignment="Center" Margin="0,0,5,0" />
+                                                    <TextBlock Text="{Binding LockLabel}" FontSize="11.5" Foreground="{StaticResource TextSecondary}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <Button Content="Ver todos los discos…" Style="{StaticResource LinkButton}" Command="{Binding PickTargetCommand}"
+                                HorizontalAlignment="Center" Margin="0,4,0,0" />
+                    </StackPanel>
+                </DockPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Pantalla de copia: cabecera con los pasos, tarjetas de origen y destino, aviso del candado y acciones. -->
         <DataTemplate DataType="{x:Type vm:CopyPanelViewModel}">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel>
-                    <TextBlock Text="{Binding Title}" Style="{StaticResource PageTitle}" />
-                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource PageSubtitle}" />
-                </StackPanel>
+                <Grid>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource PageSubtitle}" />
+                    </StackPanel>
+                    <controls:StepIndicator Current="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="24,0,0,2" />
+                </Grid>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid Grid.Row="1" Margin="0,22,0,0" MaxHeight="560" VerticalAlignment="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="72" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
                     <!-- Origen -->
                     <Grid>
-                        <Button Style="{StaticResource CardButton}" Command="{Binding PickSourceCommand}">
-                            <Grid>
-                                <ContentControl Focusable="False" IsTabStop="False" ContentTemplate="{StaticResource EmptyCard}"
-                                                  Visibility="{Binding HasSource, Converter={StaticResource NotVisible}}">
-                                    <ContentControl.Content>
-                                        <vm:EmptyCardContent Prompt="Elige el disco de origen" Tile="{StaticResource SourceTile}" />
-                                    </ContentControl.Content>
-                                </ContentControl>
-                                <ContentControl Focusable="False" IsTabStop="False" Content="{Binding Source}" ContentTemplate="{StaticResource FilledCard}"
-                                                  Visibility="{Binding HasSource, Converter={StaticResource BoolToVisibility}}" />
-                            </Grid>
-                        </Button>
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource EmptySourceCard}" Focusable="False" IsTabStop="False"
+                                        Visibility="{Binding HasSource, Converter={StaticResource NotVisible}}" />
+                        <ContentControl Content="{Binding Source}" ContentTemplate="{StaticResource FilledCard}" Focusable="False" IsTabStop="False"
+                                        Visibility="{Binding HasSource, Converter={StaticResource BoolToVisibility}}" />
                         <Button Style="{StaticResource ClearButton}" Command="{Binding ClearSourceCommand}" ToolTip="Quitar"
-                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"
+                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,16,0"
                                 Visibility="{Binding CanClearSource, Converter={StaticResource BoolToVisibility}}" />
                     </Grid>
 
-                    <ContentPresenter ContentTemplate="{StaticResource FlowArrow}" Margin="22,0" />
+                    <ContentPresenter Grid.Column="1" ContentTemplate="{StaticResource FlowArrow}" HorizontalAlignment="Center" />
 
                     <!-- Destino -->
-                    <Grid>
-                        <Button Style="{StaticResource CardButton}" Command="{Binding PickTargetCommand}">
-                            <Grid>
-                                <ContentControl Focusable="False" IsTabStop="False" ContentTemplate="{StaticResource EmptyCard}"
-                                                  Visibility="{Binding HasTarget, Converter={StaticResource NotVisible}}">
-                                    <ContentControl.Content>
-                                        <vm:EmptyCardContent Prompt="Elige el disco de destino" Tile="{StaticResource TargetTile}" />
-                                    </ContentControl.Content>
-                                </ContentControl>
-                                <ContentControl Focusable="False" IsTabStop="False" Content="{Binding Target}" ContentTemplate="{StaticResource FilledCard}"
-                                                  Visibility="{Binding HasTarget, Converter={StaticResource BoolToVisibility}}" />
-                            </Grid>
-                        </Button>
+                    <Grid Grid.Column="2">
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource EmptyTargetCard}" Focusable="False" IsTabStop="False"
+                                        Visibility="{Binding HasTarget, Converter={StaticResource NotVisible}}" />
+                        <ContentControl Content="{Binding Target}" ContentTemplate="{StaticResource FilledCard}" Focusable="False" IsTabStop="False"
+                                        Visibility="{Binding HasTarget, Converter={StaticResource BoolToVisibility}}" />
                         <Button Style="{StaticResource ClearButton}" Command="{Binding ClearTargetCommand}" ToolTip="Quitar"
-                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"
+                                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,16,0"
                                 Visibility="{Binding HasTarget, Converter={StaticResource BoolToVisibility}}" />
                     </Grid>
-                </StackPanel>
+                </Grid>
 
-                <Button Grid.Row="2" Content="Siguiente" Style="{StaticResource PrimaryButton}" Padding="34,10"
-                        Command="{Binding NextCommand}" HorizontalAlignment="Right" />
+                <!-- Aviso del candado -->
+                <Border Grid.Row="2" Background="{StaticResource AccentSoft}" CornerRadius="14" Padding="14,10" Margin="0,18,0,0"
+                        Visibility="{Binding HasLockedDisks, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="30" Height="30" CornerRadius="10" Background="White" Margin="0,0,12,0">
+                            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="{StaticResource Accent}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Los discos con candado los necesita este equipo para funcionar: ClonDisk nunca los usará como destino."
+                                   Foreground="#1D3F7A" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Grid Grid.Row="3" Margin="0,18,0,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xEA18;" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="{StaticResource TextTertiary}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="El origen solo se lee: nunca se modifica." Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Actualizar discos" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0"
+                                Command="{Binding DataContext.RefreshCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        <Button Style="{StaticResource PrimaryButton}" Padding="24,10" Command="{Binding NextCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Siguiente" />
+                                <TextBlock Text="&#xE72A;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </DataTemplate>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="RootGrid">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="268" />
+            <ColumnDefinition Width="300" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- Barra lateral -->
-        <Border Background="{StaticResource SidebarBackground}">
-            <DockPanel Margin="14,20,14,16">
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,0,22">
-                    <Image x:Name="SidebarLogo" Width="34" Height="34" RenderOptions.BitmapScalingMode="HighQuality" />
-                    <TextBlock Text="ClonDisk" Foreground="White" FontSize="20" FontWeight="SemiBold"
-                               VerticalAlignment="Center" Margin="10,0,0,0" />
+        <!-- Barra lateral flotante: la sombra va en una capa aparte para no difuminar el texto. -->
+        <Grid Margin="16,16,0,16">
+            <Border CornerRadius="18" Background="{StaticResource SidebarBackground}" Effect="{StaticResource AccentShadow}" />
+            <Border CornerRadius="18">
+                <Border.Background>
+                    <RadialGradientBrush Center="0.15,0" GradientOrigin="0.15,0" RadiusX="0.9" RadiusY="0.35">
+                        <GradientStop Color="#2EFFFFFF" Offset="0" />
+                        <GradientStop Color="#00FFFFFF" Offset="1" />
+                    </RadialGradientBrush>
+                </Border.Background>
+            </Border>
+            <DockPanel Margin="14,20,14,14">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,10">
+                    <Border Width="42" Height="42" CornerRadius="13" Background="#2EFFFFFF" BorderBrush="#40FFFFFF" BorderThickness="1">
+                        <Image x:Name="SidebarLogo" Width="28" Height="28" RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center" Margin="12,0,0,0">
+                        <TextBlock Text="ClonDisk" Foreground="White" FontSize="19" FontWeight="Bold"
+                                   FontFamily="Segoe UI Variable Display, Segoe UI" />
+                        <TextBlock Text="Clonar discos en Windows" Foreground="#C8FFFFFF" FontSize="11" />
+                    </StackPanel>
                 </StackPanel>
 
-                <TextBlock x:Name="SidebarVersion" DockPanel.Dock="Bottom" Foreground="#B3FFFFFF" FontSize="11" Margin="8,0,0,0" />
+                <!-- Pie: gratis y de código abierto, y la versión. -->
+                <Border DockPanel.Dock="Bottom" CornerRadius="14" Background="#1FFFFFFF" Padding="14,12" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Gratis y de código abierto" Foreground="White" FontWeight="Bold" />
+                        <TextBlock Text="Sin anuncios, sin registro y sin telemetría." Foreground="#E6FFFFFF" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,2,0,0" />
+                        <TextBlock x:Name="SidebarVersion" Foreground="#B8FFFFFF" FontSize="11.5" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
 
                 <ListBox ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav}"
                          ItemContainerStyle="{StaticResource NavItem}"
@@ -311,33 +717,39 @@
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel>
-                                <Border Height="1" Background="#40FFFFFF" Margin="6,6,6,10"
-                                        Visibility="{Binding StartsGroup, Converter={StaticResource BoolToVisibility}}" />
-                                <Grid Margin="10,9">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="28" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                               Foreground="White" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Title}" Foreground="White" FontSize="13.5"
-                                               FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                    <Border Grid.Column="2" CornerRadius="4" Background="#33FFFFFF" Padding="6,1"
-                                            Visibility="{Binding IsAvailable, Converter={StaticResource NotVisible}}">
-                                        <TextBlock Text="{Binding Badge}" Foreground="White" FontSize="10.5" />
-                                    </Border>
-                                </Grid>
-                            </StackPanel>
+                            <Grid x:Name="Row" Margin="8,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="IconBox" Width="32" Height="32" CornerRadius="10" Background="#24FFFFFF" Margin="0,0,12,0">
+                                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="14" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <Border Grid.Column="2" CornerRadius="9" Background="#29FFFFFF" Padding="8,1" VerticalAlignment="Center"
+                                        Visibility="{Binding IsAvailable, Converter={StaticResource NotVisible}}">
+                                    <TextBlock Text="{Binding Badge}" FontSize="10.5" FontWeight="SemiBold" />
+                                </Border>
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                    <Setter TargetName="IconBox" Property="Background" Value="{StaticResource AccentSoft}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                    <Setter TargetName="Row" Property="Opacity" Value="0.8" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
             </DockPanel>
-        </Border>
+        </Grid>
 
         <!-- Contenido de la sección elegida -->
-        <Grid Grid.Column="1" Margin="34,28,34,26">
+        <Grid Grid.Column="1" Margin="34,46,30,22">
 
             <ContentControl Content="{Binding DiskCopy}"
                             Visibility="{Binding Section, Converter={StaticResource SectionVisibility}, ConverterParameter=DiskCopy}" />
@@ -518,8 +930,8 @@
                 <!-- Cabecera -->
                 <Grid Grid.Row="0" Margin="0,0,0,18">
                     <StackPanel>
-                        <TextBlock Text="Discos del equipo" FontSize="22" FontWeight="SemiBold" />
-                        <TextBlock Text="Elige un disco para ver sus particiones. Esta vista no modifica ningún disco."
+                        <TextBlock Text="Discos del equipo" Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="Elige un disco para ver sus particiones. Los discos con candado los necesita este equipo y no se pueden borrar."
                                    Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -554,8 +966,13 @@
                                                 <TextBlock Text="{Binding Heading}" FontSize="11" Foreground="{StaticResource TextSecondary}" />
                                             </Border>
                                             <Border Style="{StaticResource Badge}" Background="{StaticResource Accent}"
-                                                    Visibility="{Binding IsSystemDisk, Converter={StaticResource BoolToVisibility}}">
-                                                <TextBlock Text="Sistema" FontSize="11" Foreground="White" />
+                                                    Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibility}}"
+                                                    ToolTip="{Binding LockReason}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="White"
+                                                               VerticalAlignment="Center" Margin="0,0,4,0" />
+                                                    <TextBlock Text="{Binding LockLabel}" FontSize="11" Foreground="White" />
+                                                </StackPanel>
                                             </Border>
                                             <Border Style="{StaticResource Badge}" Background="{StaticResource WarningBackground}"
                                                     BorderBrush="{StaticResource WarningBorder}" BorderThickness="1"
@@ -585,6 +1002,29 @@
                                     <TextBlock Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0">
                                         <Run Text="{Binding Heading, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Summary, Mode=OneWay}" />
                                     </TextBlock>
+
+                                    <!-- Disco protegido: este equipo lo necesita y no se puede borrar ni usar como destino -->
+                                    <Border Background="{StaticResource AccentSoft}" BorderBrush="{StaticResource Accent}" BorderThickness="1"
+                                            CornerRadius="6" Padding="12,8" Margin="0,10,0,0"
+                                            Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="18" Foreground="{StaticResource Accent}"
+                                                       VerticalAlignment="Center" Margin="0,0,12,0" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock FontWeight="SemiBold">
+                                                    <Run Text="Disco protegido:" /> <Run Text="{Binding LockLabel, Mode=OneWay}" />
+                                                </TextBlock>
+                                                <TextBlock TextWrapping="Wrap" Margin="0,2,0,0">
+                                                    <Run Text="{Binding LockReason, Mode=OneWay}" />
+                                                    <Run Text="No se puede usar como destino de un clonado ni limpiar." />
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
 
                                     <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,8,0,0">
                                         <ItemsControl.ItemTemplate>
@@ -619,6 +1059,18 @@
                                         </StackPanel>
                                         <TextBlock Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,6,0,0"
                                                    Text="Para un clon de Windows que no arranca (por ejemplo, con el error 0xc000000e) porque se puso en línea junto al original. Rehace su arranque sin borrar datos." />
+                                    </StackPanel>
+
+                                    <StackPanel Margin="0,14,0,0"
+                                                Visibility="{Binding CanPrepare, Converter={StaticResource BoolToVisibility}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Content="Limpiar y formatear…" Style="{StaticResource SecondaryButton}"
+                                                    Command="{Binding DataContext.PrepareDiskCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                            <TextBlock Text="{Binding DataContext.PrepareStatus, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                       Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        </StackPanel>
+                                        <TextBlock Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                                   Text="Borra todas las particiones del disco, también las de arranque y recuperación que deja un formateo, y crea una sola partición NTFS con letra. Úsalo con un disco que tuvo Windows antes de usarlo como disco de datos, para que el equipo no intente arrancar desde él." />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
@@ -700,5 +1152,13 @@
                 </Grid>
             </Grid>
         </Grid>
+
+        <!-- Minimizar, maximizar o restaurar y cerrar -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,6,8,0" Panel.ZIndex="10">
+            <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimizar" Click="OnMinimizeClick" />
+            <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE923;" ToolTip="Restaurar" Click="OnMaximizeClick" />
+            <Button Style="{StaticResource CaptionCloseButton}" Content="&#xE8BB;" ToolTip="Cerrar" Click="OnCloseClick" />
+        </StackPanel>
     </Grid>
 </Window>

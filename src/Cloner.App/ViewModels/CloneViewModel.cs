@@ -32,14 +32,28 @@ public sealed record DiskChoice(int Number, string Title, string Details)
 {
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("es-ES");
 
-    public static DiskChoice From(DiskInfo disk)
+    /// <summary>Texto del candado («Windows en uso»…) si este equipo necesita el disco; nulo si no.</summary>
+    public string? LockLabel { get; init; }
+
+    /// <summary>Por qué no se puede elegir (solo en la lista de destinos); nulo si se puede.</summary>
+    public string? DisabledReason { get; init; }
+
+    public bool IsLocked => LockLabel is not null;
+    public bool IsSelectable => DisabledReason is null;
+
+    /// <param name="hostDiskNumber">Disco desde el que se ejecuta la aplicación, si se sabe.</param>
+    /// <param name="asTarget">Para la lista de destinos: los discos protegidos no se pueden elegir.</param>
+    public static DiskChoice From(DiskInfo disk, int? hostDiskNumber = null, bool asTarget = false)
     {
         ArgumentNullException.ThrowIfNull(disk);
         var partitions = disk.Partitions.Count(p => p.Kind != PartitionKind.Extended);
         var details = $"{InventoryText.Media(disk.Media)} {InventoryText.Bus(disk.Bus)} · {InventoryText.Style(disk.PartitionStyle)} · "
-            + (partitions == 1 ? "1 partición" : $"{partitions} particiones")
-            + (disk.IsSystemDisk ? " · Disco del sistema" : string.Empty);
-        return new DiskChoice(disk.Number, $"Disco {disk.Number} · {disk.Model} · {ByteSize.Format(disk.SizeBytes, Culture)}", details);
+            + (partitions == 1 ? "1 partición" : $"{partitions} particiones");
+        return new DiskChoice(disk.Number, $"Disco {disk.Number} · {disk.Model} · {ByteSize.Format(disk.SizeBytes, Culture)}", details)
+        {
+            LockLabel = DiskProtection.LockLabel(disk, hostDiskNumber),
+            DisabledReason = asTarget ? DiskProtection.WhyLocked(disk, hostDiskNumber) : null,
+        };
     }
 }
 
@@ -64,7 +78,8 @@ public sealed partial class CloneViewModel : ObservableObject
     private readonly ICloneDialogs _dialogs;
     private CancellationTokenSource? _cancellation;
 
-    public CloneViewModel(ICloneService service, IReadOnlyList<DiskInfo> disks, int? preferredSource, ICloneDialogs dialogs, int? preferredTarget = null)
+    /// <param name="hostDiskNumber">Disco de la aplicación; si es nulo, se averigua.</param>
+    public CloneViewModel(ICloneService service, IReadOnlyList<DiskInfo> disks, int? preferredSource, ICloneDialogs dialogs, int? preferredTarget = null, int? hostDiskNumber = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(disks);
@@ -72,11 +87,13 @@ public sealed partial class CloneViewModel : ObservableObject
         _service = service;
         _dialogs = dialogs;
 
-        Disks = disks.Select(DiskChoice.From).ToList();
+        var host = hostDiskNumber ?? DiskProtection.HostDiskNumber(disks);
+        Disks = disks.Select(d => DiskChoice.From(d, host)).ToList();
+        TargetDisks = disks.Select(d => DiskChoice.From(d, host, asTarget: true)).ToList();
         Source = Disks.FirstOrDefault(d => d.Number == preferredSource)
-            ?? Disks.FirstOrDefault(d => !disks.First(x => x.Number == d.Number).IsSystemDisk);
-        Target = Disks.FirstOrDefault(d => d.Number == preferredTarget && d != Source)
-            ?? Disks.FirstOrDefault(d => d != Source && !disks.First(x => x.Number == d.Number).IsSystemDisk);
+            ?? Disks.FirstOrDefault(d => !d.IsLocked);
+        Target = TargetDisks.FirstOrDefault(d => d.Number == preferredTarget && d.Number != Source?.Number && d.IsSelectable)
+            ?? TargetDisks.FirstOrDefault(d => d.Number != Source?.Number && d.IsSelectable);
         Verify = true;
         UseSmartCopy = true;
         Sizing = SizeMode.ExtendMain;
@@ -84,6 +101,9 @@ public sealed partial class CloneViewModel : ObservableObject
     }
 
     public IReadOnlyList<DiskChoice> Disks { get; }
+
+    /// <summary>Los mismos discos para el destino: los que este equipo necesita aparecen bloqueados.</summary>
+    public IReadOnlyList<DiskChoice> TargetDisks { get; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ReviewCommand))]
@@ -194,8 +214,16 @@ public sealed partial class CloneViewModel : ObservableObject
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSelecting), nameof(IsReviewing), nameof(IsRunning), nameof(IsFinished))]
+    [NotifyPropertyChangedFor(nameof(IsSelecting), nameof(IsReviewing), nameof(IsRunning), nameof(IsFinished), nameof(StepNumber))]
     public partial CloneStage Stage { get; set; }
+
+    /// <summary>Paso del indicador: el 1 (discos) se eligió antes de abrir el asistente.</summary>
+    public int StepNumber => Stage switch
+    {
+        CloneStage.Select => 2,
+        CloneStage.Review => 3,
+        _ => 4,
+    };
 
     public bool IsSelecting => Stage == CloneStage.Select;
     public bool IsReviewing => Stage == CloneStage.Review;

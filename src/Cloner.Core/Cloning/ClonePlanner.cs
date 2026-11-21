@@ -86,7 +86,7 @@ internal static class ClonePlanner
             Source = DiskIdentity.From(source),
             Target = DiskIdentity.From(target),
             Options = options,
-            SourceIsSystemDisk = source.IsSystemDisk,
+            SourceIsSystemDisk = source.ContainsWindows,
             SourceIsReadOnly = source.IsReadOnly,
             SourcePartitions = source.Partitions,
             TargetPartitions = target.Partitions,
@@ -115,9 +115,13 @@ internal static class ClonePlanner
             return;
         }
 
-        if (target.IsSystemDisk)
+        if (target.ContainsWindows)
         {
             problems.Add($"El disco {target.Number} es el disco del sistema en uso y no se puede usar como destino.");
+        }
+        else if (target.ContainsBootLoader)
+        {
+            problems.Add($"El disco {target.Number} tiene la partición de arranque (EFI) con la que arranca el Windows en uso: si se borrara, este equipo dejaría de arrancar. No se puede usar como destino.");
         }
 
         if (environment.HostDiskNumber == target.Number)
@@ -143,8 +147,9 @@ internal static class ClonePlanner
 
     private static void CheckSource(DiskInfo source, PartitionTableInfo? table, CloneEnvironment environment, List<string> problems)
     {
-        // RF-10: el disco del sistema solo se puede copiar en caliente a partir de instantáneas.
-        if (source.IsSystemDisk)
+        // RF-10: el disco del Windows en uso solo se puede copiar en caliente a partir de
+        // instantáneas. Un disco que solo tiene el arranque (su partición EFI) no las necesita.
+        if (source.ContainsWindows)
         {
             var windows = source.Partitions.FirstOrDefault(p => p.ContainsWindows);
             if (!environment.SnapshotsAvailable)
@@ -206,9 +211,17 @@ internal static class ClonePlanner
     {
         var warnings = new List<string>();
 
-        if (source.IsSystemDisk)
+        if (source.ContainsWindows)
         {
             warnings.Add("Es el disco del sistema: el clon arrancará igual que el original. Para arrancar desde él, retira o desconecta el disco original.");
+            if (!source.ContainsBootLoader)
+            {
+                warnings.Add("El arranque de este Windows (su partición EFI) está en otro disco, así que el clon no lo lleva. Si después no arranca, conéctalo como segundo disco a un equipo que funcione y usa «Reparar el arranque».");
+            }
+        }
+        else if (source.ContainsBootLoader)
+        {
+            warnings.Add("Este disco no tiene el Windows en uso, pero sí la partición de arranque con la que arranca este equipo: se copia tal cual.");
         }
 
         var snapshotNames = steps.Where(s => s.FromSnapshot && s.Partition is not null).Select(s => VolumeName(s.Partition!)).Distinct().ToList();

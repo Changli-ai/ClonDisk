@@ -1,0 +1,37 @@
+<controls:RoundedWindow x:Class="Cloner.App.MessageDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:Cloner.App.Controls"
+        Title="ClonDisk"
+        Icon="Assets/ClonDisk.ico"
+        Width="548" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="24,4,24,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border x:Name="IconBox" Width="44" Height="44" CornerRadius="14" VerticalAlignment="Top" Margin="0,2,16,0">
+            <TextBlock x:Name="IconGlyph" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+
+        <StackPanel Grid.Column="1">
+            <TextBlock x:Name="Heading" FontSize="17" FontWeight="Bold" TextWrapping="Wrap" />
+            <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                <TextBox x:Name="Message" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent"
+                         Padding="0" Foreground="{StaticResource TextSecondary}" FontSize="13.5" />
+            </ScrollViewer>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+            <Button x:Name="NoButton" Style="{StaticResource SecondaryButton}" Margin="0,0,10,0" IsCancel="True" Click="OnNoClick" />
+            <Button x:Name="YesButton" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="OnYesClick" />
+        </StackPanel>
+    </Grid>
+</controls:RoundedWindow>

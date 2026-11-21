@@ -36,7 +36,8 @@ public sealed class DiskViewModel
 
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("es-ES");
 
-    public DiskViewModel(DiskInfo disk)
+    /// <param name="hostDiskNumber">Disco desde el que se ejecuta la aplicación, si se sabe.</param>
+    public DiskViewModel(DiskInfo disk, int? hostDiskNumber = null)
     {
         ArgumentNullException.ThrowIfNull(disk);
 
@@ -45,6 +46,9 @@ public sealed class DiskViewModel
         Heading = $"Disco {disk.Number}";
         Summary = $"{Size(disk.SizeBytes)} · {InventoryText.Media(disk.Media)} {InventoryText.Bus(disk.Bus)} · {InventoryText.Style(disk.PartitionStyle)}";
         IsSystemDisk = disk.IsSystemDisk;
+        LockLabel = DiskProtection.LockLabel(disk, hostDiskNumber);
+        LockReason = DiskProtection.WhyLocked(disk, hostDiskNumber);
+        CanPrepare = DiskPreparationService.CannotPrepare(disk, hostDiskNumber) is null;
         Warnings = BuildWarnings(disk);
         Properties = BuildProperties(disk);
         Identity =
@@ -59,6 +63,17 @@ public sealed class DiskViewModel
 
     /// <summary>Puede tener un Windows clonado cuyo arranque se puede rehacer.</summary>
     public bool CanRepairBoot { get; }
+
+    /// <summary>Se puede limpiar y formatear: no es un disco que este equipo necesite.</summary>
+    public bool CanPrepare { get; }
+
+    /// <summary>Texto del candado («Windows en uso»…) si este equipo necesita el disco; nulo si no.</summary>
+    public string? LockLabel { get; }
+
+    /// <summary>Por qué el disco está protegido contra escritura; nulo si no lo está.</summary>
+    public string? LockReason { get; }
+
+    public bool IsLocked => LockLabel is not null;
 
     public int Number { get; }
     public string Model { get; }

@@ -1,13 +1,15 @@
-<Window x:Class="Cloner.App.DiskPickerWindow"
+<controls:RoundedWindow x:Class="Cloner.App.DiskPickerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:Cloner.App.Controls"
         Title="Elegir un disco · ClonDisk"
         Icon="Assets/ClonDisk.ico"
-        Width="560" Height="460" MinWidth="440" MinHeight="320"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
-        Background="{StaticResource WindowBackground}"
-        Foreground="{StaticResource TextPrimary}"
-        FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True">
+        Width="600" Height="500" MinWidth="470" MinHeight="350"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" UseLayoutRounding="True">
+    <controls:RoundedWindow.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <controls:NotVisibleConverter x:Key="NotVisible" />
+    </controls:RoundedWindow.Resources>
     <Grid Margin="22,18,22,18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -25,6 +27,7 @@
                     <Style TargetType="ListBoxItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                         <Setter Property="Margin" Value="0,0,0,4" />
+                        <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
@@ -39,6 +42,9 @@
                                             <Setter TargetName="Root" Property="Background" Value="{StaticResource AccentSoft}" />
                                             <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource Accent}" />
                                         </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter TargetName="Root" Property="Opacity" Value="0.6" />
+                                        </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Setter.Value>
@@ -52,11 +58,33 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="&#xEDA2;" FontFamily="Segoe MDL2 Assets" FontSize="22"
-                                       Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                            <Grid VerticalAlignment="Center" Margin="0,0,14,0">
+                                <TextBlock Text="&#xEDA2;" FontFamily="Segoe MDL2 Assets" FontSize="22" Foreground="{StaticResource Accent}" />
+                                <!-- Candado: el disco lo necesita este equipo (Windows en uso, su arranque o la app) -->
+                                <Border Background="{StaticResource Accent}" CornerRadius="8" Width="16" Height="16"
+                                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-6,-4"
+                                        Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="9" Foreground="White"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <Border Background="{StaticResource Accent}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibility}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="White"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0" />
+                                            <TextBlock Text="{Binding LockLabel}" FontSize="11" Foreground="White" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
                                 <TextBlock Text="{Binding Details}" Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,2,0,0" />
+                                <TextBlock Text="{Binding DisabledReason}" Foreground="{StaticResource DangerText}" FontSize="12"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"
+                                           Visibility="{Binding IsSelectable, Converter={StaticResource NotVisible}}" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
@@ -69,4 +97,4 @@
             <Button Content="Elegir" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="OnChooseClick" />
         </StackPanel>
     </Grid>
-</Window>
+</controls:RoundedWindow>

@@ -32,6 +32,9 @@ switch (command)
     case "repair-boot":
         return await RepairBootCommand.RunAsync(args);
 
+    case "prepare":
+        return await PrepareCommand.RunAsync(args);
+
     case "version" or "--version":
         Console.WriteLine($"ClonDisk CLI {version}");
         return 0;
@@ -72,6 +75,10 @@ void WriteHelp(TextWriter output)
     output.WriteLine("  repair-boot <disco>         Rehace el arranque de un clon de Windows que no arranca (por");
     output.WriteLine("                              ejemplo, 0xc000000e): lo pone en línea, corrige la letra C:");
     output.WriteLine("                              en su registro y ejecuta bcdboot. No borra datos.");
+    output.WriteLine("  prepare <disco>             Limpia y formatea un disco: borra todas sus particiones (también");
+    output.WriteLine("                              las de arranque que deja un formateo), lo inicializa en GPT y crea");
+    output.WriteLine("                              una sola partición NTFS con letra. Como «clean» de diskpart.");
+    output.WriteLine("      --virtual-only          Solo admite discos virtuales (VHD/VHDX), para pruebas.");
     output.WriteLine("  version                     Muestra la versión.");
     output.WriteLine("  help                        Muestra esta ayuda.");
     output.WriteLine();

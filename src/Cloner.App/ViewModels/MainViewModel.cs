@@ -12,15 +12,18 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IDiskInventory _inventory;
     private readonly ICloneService _cloneService;
     private readonly IBootRepairService? _bootRepair;
+    private readonly IDiskPreparationService? _preparation;
     private IReadOnlyList<DiskInfo> _disks = [];
+    private int? _hostDisk;
 
-    public MainViewModel(IDiskInventory inventory, ICloneService cloneService, IBootRepairService? bootRepair = null)
+    public MainViewModel(IDiskInventory inventory, ICloneService cloneService, IBootRepairService? bootRepair = null, IDiskPreparationService? preparation = null)
     {
         ArgumentNullException.ThrowIfNull(inventory);
         ArgumentNullException.ThrowIfNull(cloneService);
         _inventory = inventory;
         _cloneService = cloneService;
         _bootRepair = bootRepair;
+        _preparation = preparation;
         SelectedNav = NavItem.All[0];
         DiskCopy = new CopyPanelViewModel(
             "Clonar un disco",
@@ -66,10 +69,69 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Lo que está haciendo la reparación del arranque en curso, o nulo.</summary>
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(RepairBootCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RepairBootCommand), nameof(PrepareDiskCommand))]
     public partial string? RepairStatus { get; set; }
 
-    private bool CanRepairBoot => _bootRepair is not null && RepairStatus is null && SelectedDisk is { CanRepairBoot: true };
+    /// <summary>La ventana lo asigna: pregunta (sí o no) antes de limpiar y formatear un disco.</summary>
+    public Func<string, bool>? ConfirmPrepare { get; set; }
+
+    /// <summary>La ventana lo asigna: muestra el resultado de la limpieza (texto y si fue bien).</summary>
+    public Action<string, bool>? ShowPrepareResult { get; set; }
+
+    /// <summary>Lo que está haciendo la limpieza del disco en curso, o nulo.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RepairBootCommand), nameof(PrepareDiskCommand))]
+    public partial string? PrepareStatus { get; set; }
+
+    private bool IsBusy => RepairStatus is not null || PrepareStatus is not null;
+
+    private bool CanRepairBoot => _bootRepair is not null && !IsBusy && SelectedDisk is { CanRepairBoot: true };
+
+    private bool CanPrepareDisk => _preparation is not null && !IsBusy && SelectedDisk is { CanPrepare: true };
+
+    /// <summary>
+    /// Deja el disco seleccionado como nuevo: borra todas sus particiones (también las de arranque
+    /// que un formateo deja), crea una sola NTFS y le da letra. Como «clean» de diskpart.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanPrepareDisk))]
+    private async Task PrepareDiskAsync()
+    {
+        var selected = SelectedDisk!;
+        var disk = _disks.FirstOrDefault(d => d.Number == selected.Number);
+        if (disk is null)
+        {
+            return;
+        }
+
+        var erased = disk.Partitions.Count == 0
+            ? "• El disco no tiene particiones.\n"
+            : string.Concat(selected.Partitions.Select(p => $"• Partición {p.Number}: {p.Kind} · {p.Volume} · {p.FileSystem} · {p.Size}\n"));
+        var question =
+            $"Se borrará TODO el contenido del disco {disk.Number} ({disk.Model}):\n\n"
+            + erased
+            + "\nClonDisk borrará todas sus particiones, también las de arranque (EFI) y recuperación que deja un formateo, "
+            + $"y creará una sola partición NTFS «{DiskPreparationService.VolumeLabel}» con letra de unidad.\n\n"
+            + "No se puede deshacer. ¿Limpiar y formatear el disco?";
+        if (ConfirmPrepare?.Invoke(question) != true)
+        {
+            return;
+        }
+
+        PrepareStatus = "Empezando la limpieza";
+        try
+        {
+            var progress = new Progress<string>(text => PrepareStatus = text + "…");
+            var result = await _preparation!.PrepareAsync(DiskIdentity.From(disk), progress);
+            var text = result.LogPath is null ? result.Message : $"{result.Message}\n\nRegistro: {result.LogPath}";
+            ShowPrepareResult?.Invoke(text, result.Succeeded);
+        }
+        finally
+        {
+            PrepareStatus = null;
+        }
+
+        await RefreshAsync();
+    }
 
     /// <summary>
     /// Rehace el arranque del disco seleccionado: para un clon que se puso en línea junto al
@@ -114,7 +176,7 @@ public sealed partial class MainViewModel : ObservableObject
     public bool HasLoaded { get; private set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(RepairBootCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RepairBootCommand), nameof(PrepareDiskCommand))]
     public partial DiskViewModel? SelectedDisk { get; set; }
 
     /// <summary>Mensaje de carga, de error o de lista vacía. Nulo cuando hay discos que mostrar.</summary>
@@ -135,10 +197,11 @@ public sealed partial class MainViewModel : ObservableObject
             var disks = await Task.Run(_inventory.GetDisks);
 
             _disks = disks;
+            _hostDisk = DiskProtection.HostDiskNumber(disks);
             Disks.Clear();
             foreach (var disk in disks)
             {
-                Disks.Add(new DiskViewModel(disk));
+                Disks.Add(new DiskViewModel(disk, _hostDisk));
             }
 
             SelectedDisk = Disks.FirstOrDefault(d => d.Number == selectedNumber) ?? Disks.FirstOrDefault();
@@ -163,7 +226,7 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task StartWizardAsync(int source, int target)
     {
         var disks = _disks;
-        ShowCloneWizard?.Invoke(dialogs => new CloneViewModel(_cloneService, disks, source, dialogs, target));
+        ShowCloneWizard?.Invoke(dialogs => new CloneViewModel(_cloneService, disks, source, dialogs, target, _hostDisk));
         await RefreshAsync();
     }
 
@@ -175,7 +238,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var disks = _disks;
         var source = SelectedDisk?.Number;
-        ShowCloneWizard?.Invoke(dialogs => new CloneViewModel(_cloneService, disks, source, dialogs));
+        ShowCloneWizard?.Invoke(dialogs => new CloneViewModel(_cloneService, disks, source, dialogs, hostDiskNumber: _hostDisk));
         await RefreshAsync();
     }
 }

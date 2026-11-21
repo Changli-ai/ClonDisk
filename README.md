@@ -13,10 +13,10 @@ programas y ajustes.
 > envía telemetría. Su código está publicado aquí bajo la licencia **GPL-3.0**: puedes leerlo,
 > compilarlo, modificarlo y compartirlo.
 
-> **Estado: en desarrollo (versión 0.1.3).** El clonado ya funciona y está probado con discos
-> virtuales y en un equipo real, pero aún no se ha confirmado que un clon del disco del sistema
-> arranque, y varias funciones están por hacer (ver [Hoja de ruta](#hoja-de-ruta)). Úsalo con
-> copia de seguridad de lo importante.
+> **Estado: en desarrollo (versión 0.1.4).** El clonado ya funciona y está probado con discos
+> virtuales y en equipos reales: un clon del disco del sistema ya ha arrancado Windows en hardware
+> real. Aún falta confirmarlo en más casos y varias funciones están por hacer (ver
+> [Hoja de ruta](#hoja-de-ruta)). Úsalo con copia de seguridad de lo importante.
 
 ---
 
@@ -55,8 +55,10 @@ programas y ajustes.
 
 ### Seguridad de tus datos
 - **El disco de origen nunca se escribe:** se abre siempre en solo lectura.
-- **No deja elegir un destino peligroso:** ni el disco del sistema en uso, ni el disco desde el
-  que se ejecuta la app, ni el propio origen.
+- **Discos protegidos con candado:** el disco del Windows en uso, el que tiene su partición de
+  arranque (EFI) —que puede ser otro disco— y el disco desde el que se ejecuta la app aparecen con
+  un candado y no se pueden elegir como destino ni limpiar. Tampoco se puede clonar un disco sobre
+  sí mismo.
 - **Confirmación explícita:** antes de escribir muestra el origen, el destino y **todo lo que se
   va a borrar**, y te pide confirmarlo.
 - **Identifica los discos por número de serie y GUID**, no solo por su número, y lo comprueba de
@@ -67,7 +69,9 @@ programas y ajustes.
   copiado (huellas XxHash).
 
 ### Comodidad
-- Interfaz clara en **español**, con barra lateral y tarjetas de origen y destino.
+- Interfaz moderna en **español**: barra lateral, tarjetas de origen y destino con los datos de
+  cada disco y su mapa de particiones, discos sugeridos para elegir con un clic, indicador de pasos
+  y ventanas con las esquinas redondeadas.
 - **Progreso en tiempo real:** porcentaje, velocidad, tiempo restante y lo que se está copiando.
 - **Cancelación segura** en cualquier momento, con aviso visible mientras se detiene.
 - **Registro detallado** de cada operación, exportable.
@@ -75,6 +79,10 @@ programas y ajustes.
   se puso en línea junto al original): desde «Discos del equipo» o con `clondisk-cli repair-boot`,
   ClonDisk lo pone en línea, corrige la letra C: en su registro y rehace su arranque con `bcdboot`,
   sin borrar datos.
+- **Limpiar y formatear un disco** que tuvo Windows antes de usarlo como disco de datos: borra
+  todas sus particiones (también las de arranque y recuperación que deja un formateo normal), crea
+  una sola partición NTFS y le da letra. Así el equipo no intenta arrancar desde él. Desde «Discos
+  del equipo» o con `clondisk-cli prepare`.
 - **Avisos útiles** antes de empezar: BitLocker, salud del disco (SMART), espacio, identificadores…
 - **Línea de comandos** (`clondisk-cli`) para automatizar o usar sin interfaz.
 - **Rápido:** lectura y escritura en hilos separados con búferes grandes; la copia archivo a
@@ -93,17 +101,20 @@ La versión publicada es **autocontenida**: no hace falta instalar .NET para usa
 
 ## Descarga
 
-Cuando haya versiones publicadas estarán en la sección **Releases** de este repositorio. Mientras
-tanto puedes compilarlo tú mismo (ver abajo). El ejecutable aún no está firmado, así que Windows
-SmartScreen puede avisar al abrirlo: «Más información» → «Ejecutar de todas formas».
+Descarga la [última versión](https://github.com/Changli-ai/ClonDisk/releases/latest/download/ClonDisk-win-x64.zip)
+(un .zip con `ClonDisk.exe` y `clondisk-cli.exe`) o cualquier versión anterior desde
+[Releases](https://github.com/Changli-ai/ClonDisk/releases). No hace falta instalar nada:
+descomprímelo y abre `ClonDisk.exe`. El ejecutable aún no está firmado, así que Windows SmartScreen
+puede avisar al abrirlo: «Más información» → «Ejecutar de todas formas».
 
 ## Cómo usarlo
 
 ### Interfaz (`ClonDisk.exe`)
 1. Abre ClonDisk y acepta el aviso de permisos de Windows.
 2. Elige **Disco** (cualquier disco) o **Sistema** (el disco de Windows en uso, ya preseleccionado).
-3. Pulsa **+** en la tarjeta de origen y en la de destino para elegir los discos y luego
-   **Siguiente**.
+3. Elige los discos en las tarjetas de origen y destino (con uno de los discos sugeridos o con
+   **+**, que abre la lista completa) y pulsa **Siguiente**. Los discos con candado no se pueden
+   usar como destino.
 4. Revisa las opciones (modo de copia, uso del espacio, identificadores, tabla de particiones) y el
    plan: qué se copiará, cómo quedarán las particiones y **qué se borrará**.
 5. Marca la confirmación y pulsa **Borrar el destino y clonar**.
@@ -120,6 +131,7 @@ clondisk-cli list                    # discos y particiones (solo lectura)
 clondisk-cli plan 0 1                # qué haría un clonado del disco 0 al 1, sin escribir nada
 clondisk-cli clone 0 1               # clona; pide escribir BORRAR para confirmar
 clondisk-cli repair-boot 1           # rehace el arranque de un clon; pide escribir REPARAR
+clondisk-cli prepare 2               # limpia el disco 2 y crea una partición NTFS; pide BORRAR
 ```
 
 Opciones de `plan` y `clone`:

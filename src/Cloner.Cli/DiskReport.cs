@@ -1,5 +1,6 @@
 using System.Globalization;
 using Cloner.Core;
+using Cloner.Core.Cloning;
 using Cloner.Core.Inventory;
 
 namespace Cloner.Cli;
@@ -34,7 +35,7 @@ internal static class DiskReport
 
     private static void WriteDisk(TextWriter output, DiskInfo disk)
     {
-        var role = disk.IsSystemDisk ? "  [disco del sistema]" : string.Empty;
+        var role = DiskProtection.LockLabel(disk, hostDiskNumber: null) is { } locked ? $"  [protegido: {locked}]" : string.Empty;
         output.WriteLine(
             $"Disco {disk.Number}: {disk.Model}  ·  {Size(disk.SizeBytes)}  ·  " +
             $"{InventoryText.Media(disk.Media)} {InventoryText.Bus(disk.Bus)}  ·  {InventoryText.Style(disk.PartitionStyle)}{role}");

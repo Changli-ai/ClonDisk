@@ -20,13 +20,33 @@
         <SolidColorBrush x:Key="SuccessBackground" Color="#E8F6EE" />
         <SolidColorBrush x:Key="SuccessBorder" Color="#97D3AE" />
         <SolidColorBrush x:Key="SuccessText" Color="#1C5E36" />
+        <SolidColorBrush x:Key="SuccessStrong" Color="#16A365" />
+        <SolidColorBrush x:Key="TextTertiary" Color="#8A94A6" />
+        <SolidColorBrush x:Key="StepTrack" Color="#E1E6EE" />
+        <SolidColorBrush x:Key="SoftFill" Color="#F3F5F9" />
+
+        <!-- Degradados propios de ClonDisk: azul (origen, acciones) y verde (destino). -->
+        <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#1C5BD6" Offset="0" />
+            <GradientStop Color="#3B86F2" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="SuccessGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#3DD68C" Offset="0" />
+            <GradientStop Color="#16A365" Offset="1" />
+        </LinearGradientBrush>
+
+        <!-- Sombras suaves para tarjetas y botones principales. -->
+        <DropShadowEffect x:Key="CardShadow" Color="#142850" BlurRadius="26" ShadowDepth="6" Direction="270" Opacity="0.07" />
+        <DropShadowEffect x:Key="AccentShadow" Color="#1F6FEB" BlurRadius="18" ShadowDepth="5" Direction="270" Opacity="0.28" />
+        <DropShadowEffect x:Key="SuccessShadow" Color="#16A365" BlurRadius="22" ShadowDepth="6" Direction="270" Opacity="0.30" />
 
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource CardBackground}" />
-            <Setter Property="BorderBrush" Value="{StaticResource CardBorder}" />
+            <Setter Property="BorderBrush" Value="#E8ECF2" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="20" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="22" />
+            <Setter Property="Effect" Value="{StaticResource CardShadow}" />
         </Style>
 
         <Style x:Key="SectionTitle" TargetType="TextBlock">
@@ -36,16 +56,16 @@
         </Style>
 
         <Style x:Key="Badge" TargetType="Border">
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="8,2" />
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="Background" Value="{StaticResource WindowBackground}" />
         </Style>
 
         <Style x:Key="PrimaryButton" TargetType="Button">
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="Background" Value="{StaticResource Accent}" />
-            <Setter Property="Padding" Value="18,8" />
+            <Setter Property="Background" Value="{StaticResource AccentGradient}" />
+            <Setter Property="Padding" Value="20,10" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -53,16 +73,18 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Root"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
+                                CornerRadius="10"
+                                Padding="{TemplateBinding Padding}"
+                                Effect="{StaticResource AccentShadow}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Root" Property="Opacity" Value="0.88" />
+                                <Setter TargetName="Root" Property="Opacity" Value="0.9" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Root" Property="Opacity" Value="0.5" />
+                                <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                                <Setter TargetName="Root" Property="Effect" Value="{x:Null}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -80,7 +102,7 @@
                         <Border x:Name="Root"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{StaticResource CardBorder}" BorderThickness="1"
-                                CornerRadius="6"
+                                CornerRadius="10"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -99,6 +121,94 @@
 
         <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
             <Setter Property="Background" Value="{StaticResource Danger}" />
+        </Style>
+
+        <!-- Títulos de página grandes, como en la propuesta de diseño. -->
+        <Style x:Key="PageTitle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI Variable Display, Segoe UI" />
+            <Setter Property="FontSize" Value="28" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+
+        <Style x:Key="PageSubtitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
+
+        <!-- Etiqueta «ORIGEN» / «DESTINO» con su punto de color. -->
+        <Style x:Key="RoleLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- Ventanas emergentes redondeadas (RoundedWindow): sombra, borde y barra de título propia. -->
+        <DropShadowEffect x:Key="WindowShadow" Color="#0F1E3C" BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.22" />
+
+        <Style x:Key="WindowCloseButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Width="40" Height="30" CornerRadius="10" Background="Transparent">
+                            <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                       Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#E5484D" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RoundedWindowStyle" TargetType="Window">
+            <Setter Property="WindowStyle" Value="None" />
+            <Setter Property="AllowsTransparency" Value="True" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="UseLayoutRounding" Value="True" />
+            <Setter Property="WindowChrome.WindowChrome">
+                <Setter.Value>
+                    <WindowChrome CaptionHeight="54" ResizeBorderThickness="10" GlassFrameThickness="0"
+                                  CornerRadius="0" UseAeroCaptionButtons="False" />
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Window">
+                        <Grid Margin="14">
+                            <Border CornerRadius="16" Background="{StaticResource WindowBackground}" Effect="{StaticResource WindowShadow}" />
+                            <Border CornerRadius="16" Background="{StaticResource WindowBackground}" BorderBrush="#D9DFE8" BorderThickness="1">
+                                <DockPanel>
+                                    <Grid DockPanel.Dock="Top" Height="40">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                            <Image Source="{TemplateBinding Icon}" Width="16" Height="16" Margin="0,0,8,0"
+                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <TextBlock Text="{TemplateBinding Title}" FontSize="12" Foreground="{StaticResource TextSecondary}"
+                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <Button x:Name="PART_Close" Style="{StaticResource WindowCloseButton}" ToolTip="Cerrar"
+                                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                WindowChrome.IsHitTestVisibleInChrome="True" />
+                                    </Grid>
+                                    <AdornerDecorator>
+                                        <ContentPresenter />
+                                    </AdornerDecorator>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Application.Resources>
 </Application>

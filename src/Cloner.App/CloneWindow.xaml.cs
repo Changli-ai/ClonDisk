@@ -1,12 +1,13 @@
 using System.ComponentModel;
 using System.Windows;
+using Cloner.App.Controls;
 using Cloner.App.ViewModels;
 using Microsoft.Win32;
 
 namespace Cloner.App;
 
 /// <summary>Asistente de clonado. Mientras se copia, cerrar la ventana equivale a pedir la cancelación.</summary>
-public partial class CloneWindow : Window, ICloneDialogs
+public partial class CloneWindow : RoundedWindow, ICloneDialogs
 {
     public CloneWindow()
     {
@@ -19,13 +20,14 @@ public partial class CloneWindow : Window, ICloneDialogs
         set => DataContext = value;
     }
 
-    public bool ConfirmCancel() => MessageBox.Show(
+    public bool ConfirmCancel() => MessageDialog.Confirm(
         this,
-        "Si cancelas, el disco de destino quedará incompleto y sin tabla de particiones.\n\n¿Cancelar el clonado?",
         "Cancelar el clonado",
-        MessageBoxButton.YesNo,
-        MessageBoxImage.Warning,
-        MessageBoxResult.No) == MessageBoxResult.Yes;
+        "Si cancelas, el disco de destino quedará incompleto y sin tabla de particiones.",
+        "Cancelar el clonado",
+        "Seguir clonando",
+        MessageKind.Warning,
+        dangerous: true);
 
     public string? ChooseLogDestination(string suggestedName)
     {
@@ -40,7 +42,7 @@ public partial class CloneWindow : Window, ICloneDialogs
     }
 
     public void ShowError(string message) =>
-        MessageBox.Show(this, message, "ClonDisk", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageDialog.Show(this, "No se pudo continuar", message, MessageKind.Error);
 
     protected override void OnClosing(CancelEventArgs e)
     {

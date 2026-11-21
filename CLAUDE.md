@@ -32,6 +32,10 @@ el aviso destacado al terminar y «Reparar el arranque»; ver «Prueba real del 
 línea junto al original antes de cambiar los discos. **El 19/11/2026, tras «Reparar el arranque»
 con la 0.1.3, el clon arrancó Windows en el hardware real con los archivos del original** (primera
 vez que un clon del disco del sistema hecho con ClonDisk arranca).
+**0.1.4 (21/11/2026):** candado en los discos que necesita el equipo, «Limpiar y formatear» y
+**rediseño de la app y de la web** (ver «Rediseño del 21/11/2026»). Confirmada y subida a GitHub, con
+el .exe generado en `publish/ClonDisk-0.1.4-win-x64/`; la Release v0.1.4 queda pendiente de que el
+usuario la apruebe (hasta entonces la descarga directa da la 0.1.3, aunque la web ya diga 0.1.4).
 
 **Estado anterior:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
 sistema en caliente): instantáneas VSS, copia inteligente, planificador y ejecutor hechos. Pasan
@@ -302,6 +306,12 @@ está hecho.
   - **Herramientas:** GitHub CLI 2.104.0 instalado con winget en `C:\Program Files\GitHub CLI\gh.exe`
     (no está en el PATH de las consolas de desarrollo; winget está en
     `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`), con sesión iniciada como `Changli-ai`.
+  - **Dirección propia (pregunta del 21/11/2026):** `https://clondisk/` no es posible (hace falta una
+    terminación). Opciones explicadas: comprar un dominio (`clondisk.com`, `clondisk.app`…; la compra y
+    los registros DNS los hace el usuario; después, archivo `CNAME` en `docs/`, dominio en Settings →
+    Pages con «Enforce HTTPS», y cambiar `canonical`, Open Graph, datos estructurados y `sitemap.xml`,
+    más una propiedad nueva en Search Console), o gratis `https://clondisk.github.io` con una
+    organización de GitHub `clondisk`. Pendiente de que el usuario decida.
   - **Al publicar una versión nueva** (así se hizo la 0.1.1): subir `Version` en
     `Directory.Build.props` y la versión en el README, en la web (`softwareVersion`, la nota bajo
     los botones y la tabla de descarga) y en `LÉEME.txt`, y la fecha de `sitemap.xml`; confirmar y
@@ -333,6 +343,47 @@ reglas de trabajo):
 - Disco de emergencia: elegir USB, CD/DVD o crear una ISO (ruta y «Examinar…»), botón
   «Añadir controlador» y «Crear».
 - Clonación por red: elegir entre receptor por navegador o arranque PXE, con guía.
+
+### Rediseño del 21/11/2026
+
+El usuario pidió un diseño más moderno con la misma paleta. Se hizo primero una maqueta en HTML
+(`diseno/app.html` y `diseno/web.html`, con sus PNG; la carpeta no está en git) y, aprobada, se aplicó:
+
+- **Paleta** (sin cambios): azul `#1F6FEB` y degradado `#1C5BD6`→`#3B86F2` para el origen y las
+  acciones, verde `#16A365`/`#3DD68C` para el destino, fondo `#F3F5F9`. En `App.xaml`: `AccentGradient`,
+  `SuccessGradient`, sombras `CardShadow`/`AccentShadow`/`SuccessShadow`, `TextTertiary`, `SoftFill`,
+  estilos globales `PageTitle`/`PageSubtitle` (Segoe UI Variable Display, 28 px, negrita) y tarjetas
+  (`Card`) con radio 16 y sombra suave; botones con radio 10 y el principal en degradado.
+- **Ventana principal:** se abre **maximizada** y tiene **barra de título propia** (`WindowChrome`,
+  botones de minimizar/maximizar/cerrar en `MainWindow`, el de cerrar en rojo al pasar el ratón): la
+  barra blanca de Windows 10 no seguía el diseño. Maximizada se compensa el borde que Windows deja fuera
+  de la pantalla (`SystemParameters.WindowResizeBorderThickness`).
+- **Barra lateral flotante** (margen 16, radio 18, degradado y sombra en una capa aparte para no
+  difuminar el texto): logotipo en un cuadro translúcido, grupos «CLONAR», «HERRAMIENTAS» y «EQUIPO»
+  (`NavItem.GroupTitle`), cada entrada con su icono en un cuadro; la elegida va en blanco con texto
+  azul. Abajo, tarjeta «Gratis y de código abierto» con la versión.
+- **Disco y Sistema:** cabecera con el indicador de pasos (`Controls/StepIndicator`: Discos · Opciones ·
+  Revisar · Clonar; el asistente marca su paso con `CloneViewModel.StepNumber`). Tarjetas de origen y
+  destino a lo ancho, unidas por un círculo con degradado azul-verde. Con un disco elegido
+  (`CardContent`: `Chips`, `LockLabel`, `Stats`, `Segments`, `Legend`, `Footer`), la tarjeta muestra la
+  ilustración, etiquetas, el candado, cuatro cifras (usado, libre, salud, temperatura), la leyenda y el
+  mapa de particiones. Vacía, borde discontinuo, botón «+» grande con degradado y **discos sugeridos**
+  para elegir con un clic (`SourceSuggestions`/`TargetSuggestions`, los protegidos desactivados con su
+  candado) y «Ver todos los discos…». Debajo, el aviso del candado y la barra con «El origen solo se
+  lee», «Actualizar discos» y «Siguiente».
+- **Ventanas emergentes redondeadas** (`Controls/RoundedWindow`, estilo `RoundedWindowStyle`): sin
+  marco de Windows, esquinas de 16 px, sombra, borde y barra de título propia con su «×»; se arrastran
+  y cambian de tamaño con `WindowChrome`. Lo usan el asistente (`CloneWindow`), el selector de discos y
+  **`MessageDialog`**, que sustituye a todos los `MessageBox` (cancelar el clonado, errores, reparar el
+  arranque, limpiar y formatear; las acciones destructivas en rojo y sin Intro por defecto). El
+  diálogo de guardar el registro sigue siendo el de Windows.
+- **Web** (`docs/index.html`): mismo contenido y SEO, con cabecera translúcida, portada con degradados,
+  rejilla y titular en degradado, sellos, tarjetas de radio 20, característica destacada 2×2, galería
+  «Así es ClonDisk» con seis capturas, pasos numerados en degradado y llamada final en una tarjeta
+  azul. Mantiene el modo oscuro y la adaptación al móvil (comprobada a 375 px). Capturas nuevas en
+  `docs/assets/captura-*.png` (principal, sistema, opciones, confirmación, progreso, resultado,
+  selector, discos, limpiar), dibujadas con el proyecto de captura: las ventanas redondeadas se
+  dibujan enteras (con su marco) sobre fondo transparente.
 
 ## Tecnologías
 
@@ -553,6 +604,33 @@ Clonado (`Cloner.Core/Cloning`, etapa 2):
     provisional para poder formatearla en FAT32, y la tabla definitiva se escribe al final.
     `MountedDevices.Map` traduce entre las dos formas de identidad y `bcdboot` rehace el arranque
     en el modo nuevo (UEFI o BIOS).
+- **Discos protegidos y «Limpiar y formatear» (20/11/2026).** Caso real: en un equipo, el Windows
+  en uso estaba en el disco 0, pero arrancaba con la partición EFI de otro disco que solo se había
+  formateado (un formateo deja la EFI y su BCD). ClonDisk marcaba los dos como «disco del sistema» y,
+  con el disco de la EFI como origen, decía «No se puede hacer una instantánea del volumen de Windows
+  del disco 1». También explica el bucle de «Reparación automática» de un clon en otro equipo: el
+  firmware arrancaba con la EFI de un disco formateado, cuyo BCD apuntaba a una partición vacía (en
+  WinRE, C: vacía y el Windows del clon en D:). El usuario lo resolvió con diskpart («clean»,
+  «create partition primary», «format», «assign»). Cambios:
+  - `Cloning/DiskProtection`: candado para el disco del Windows en uso («Windows en uso»), el de su
+    arranque («Arranque del equipo») y el de la app («Disco de ClonDisk»), con su motivo. La interfaz
+    lo muestra con el glifo de candado (`E72E`) en «Discos del equipo», en el selector de discos y en
+    el asistente; en la lista de destinos esos discos salen desactivados, con el motivo en rojo.
+  - `ClonePlanner` distingue los dos casos: como destino, el disco del arranque tiene su propio
+    mensaje; como origen, solo el disco con Windows (`ContainsWindows`) exige instantánea y cuenta
+    como disco del sistema (`SourceIsSystemDisk`). Si el Windows de origen arranca desde otro disco,
+    el plan avisa de que el clon no lleva su arranque.
+  - `Cloning/DiskPreparationService` («Limpiar y formatear…» en «Discos del equipo», CLI
+    `prepare <disco> [--virtual-only]`, que pide BORRAR): revalida el disco (RS-04), rechaza los
+    discos con candado y los de solo lectura, espera 90 s si hubo instantáneas en el proceso
+    (`VssSnapshotSet.LastReleasedUtc`), y con la API de almacenamiento (WMI `MSFT_Disk`) pone el
+    disco en línea, `Clear` (también particiones OEM), `Initialize` en GPT, `CreatePartition` con
+    todo el espacio y letra, y formatea en NTFS con la etiqueta «Datos». Registro «limpieza-…».
+    Probado con `DiskPreparationTests` (VHD con EFI y NTFS: queda una sola NTFS con letra y sin EFI;
+    un disco cambiado no se toca) y 202 pruebas unitarias.
+  - El clonado no necesita limpiar antes el destino: ya borra su tabla al empezar (como «clean»).
+    Pendiente: que el clon de un Windows cuyo arranque está en otro disco lleve un arranque propio
+    (rehacer su EFI con bcdboot), sin depender de «Reparar el arranque».
 - `IDiskAccess`/`IBlockDevice` se sustituyen en las pruebas por discos en memoria
   (`MemoryDisk`) o archivos (`DiskDevice.OpenFile`), que recorren la misma E/S sin caché.
 - `Devices/DiskDevice` usa CsWin32 solo para funciones y constantes; las estructuras de los
