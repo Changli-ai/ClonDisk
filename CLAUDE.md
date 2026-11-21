@@ -25,17 +25,15 @@ convertir a MBR solo se marca activa la partición del Windows en uso.
 **Publicado el 17/11/2026** (ver «Producto y distribución» → «Publicación»): repositorio público
 en GitHub con licencia GPL-3.0, Releases con el .zip y web en
 https://changli-ai.github.io/ClonDisk/, ya verificada en Google Search Console. **Versión actual:
-0.1.3** (publicada el 19/11/2026). La 0.1.1 corrigió la verificación fallida «a partir del byte 0»,
+0.1.4** (publicada el 21/11/2026; la anterior, 0.1.3, el 19/11/2026). La 0.1.1 corrigió la verificación fallida «a partir del byte 0»,
 la 0.1.2 la de los bloques de C: (Windows montaba el clon mientras se verificaba) y la 0.1.3 añade
 el aviso destacado al terminar y «Reparar el arranque»; ver «Prueba real del 18/11/2026». Con la
 0.1.2 el clon se completó y verificó, pero no arrancó (0xc000000e) porque el usuario lo puso en
 línea junto al original antes de cambiar los discos. **El 19/11/2026, tras «Reparar el arranque»
 con la 0.1.3, el clon arrancó Windows en el hardware real con los archivos del original** (primera
 vez que un clon del disco del sistema hecho con ClonDisk arranca).
-**0.1.4 (21/11/2026):** candado en los discos que necesita el equipo, «Limpiar y formatear» y
-**rediseño de la app y de la web** (ver «Rediseño del 21/11/2026»). Confirmada y subida a GitHub, con
-el .exe generado en `publish/ClonDisk-0.1.4-win-x64/`; la Release v0.1.4 queda pendiente de que el
-usuario la apruebe (hasta entonces la descarga directa da la 0.1.3, aunque la web ya diga 0.1.4).
+**0.1.4 (21/11/2026, publicada):** candado en los discos que necesita el equipo, «Limpiar y
+formatear» y **rediseño de la app y de la web** (ver «Rediseño del 21/11/2026»).
 
 **Estado anterior:** etapas 0, 1 y 2 completadas. **Etapa 3 en curso** (clonar el disco del
 sistema en caliente): instantáneas VSS, copia inteligente, planificador y ejecutor hechos. Pasan
@@ -266,12 +264,20 @@ está hecho.
       `E437B102135DF7CF7325FF45EDCE78773CFA78CFA1ECC315EFD8852D47499AEA`.
     - **v0.1.2** (18/11/2026): el destino se queda sin conexión durante la copia y la
       verificación, y el diagnóstico apunta a un montaje del clon si falla fuera de la tabla.
-    - **v0.1.3** (19/11/2026, la última,
+    - **v0.1.3** (19/11/2026,
       https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.3): aviso destacado al terminar un
       clon que se deja sin conexión y «Reparar el arranque» (interfaz y CLI `repair-boot`),
       probado por el usuario en un clon real que no arrancaba y que, reparado, arrancó. Commit
       `8d23d77`; SHA-256 de `ClonDisk-0.1.3-win-x64.zip`:
       `4AF43383E6EAE78C41A493E17D1F73955381ECDB246677BF45EA5A005EFE8522`.
+    - **v0.1.4** (21/11/2026, la última,
+      https://github.com/Changli-ai/ClonDisk/releases/tag/v0.1.4): discos protegidos con candado,
+      «Limpiar y formatear» (interfaz y CLI `prepare`) y el rediseño de la app y de la web. Commit
+      `867cf40`; los `.exe` llevan `0.1.4+867cf40…`. SHA-256 de `ClonDisk-0.1.4-win-x64.zip` (y de su
+      copia `ClonDisk-win-x64.zip`): `D64C3CC79383535BB87F3843B603220C0674F3691A0656E2831A392C87776066`.
+      Comprobado: la descarga directa de la web baja este .zip y la web publicada muestra la 0.1.4.
+      Ojo con `gh release create --target`: exige el SHA completo del commit (con el corto da
+      «target_commitish is invalid»).
   - **Web** en GitHub Pages desde `docs/` (rama `main`): https://changli-ai.github.io/ClonDisk/.
     Una sola página en español (`index.html`, CSS propio, modo oscuro, adaptable al móvil) pensada
     para búsquedas como «clonar discos», «clonar disco duro a SSD» y «migrar Windows a SSD»: datos
